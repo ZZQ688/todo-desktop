@@ -27,11 +27,17 @@ pub fn initialize(connection: &mut Connection) -> Result<(), StorageError> {
             let transaction = connection.transaction()?;
             transaction.execute_batch(include_str!("../migrations/001_initial.sql"))?;
             transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+            validate_schema(&transaction)?;
             transaction.commit()?;
         }
         SCHEMA_VERSION => {}
         other => return Err(StorageError::UnsupportedVersion(other)),
     }
+    validate_schema(connection)?;
+    Ok(())
+}
+
+fn validate_schema(connection: &Connection) -> Result<(), StorageError> {
     connection.prepare("SELECT id,title,status,priority FROM tasks LIMIT 0")?;
     connection.prepare("SELECT schema_version,locale,density FROM settings WHERE id=1")?;
     Ok(())
