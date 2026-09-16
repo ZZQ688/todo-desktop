@@ -23,16 +23,30 @@ pub struct CommandError {
 }
 
 fn unavailable() -> CommandError {
-    CommandError { code: "database_unavailable", message: "本地数据无法打开。已有文件已保留。" }
+    CommandError {
+        code: "database_unavailable",
+        message: "本地数据无法打开。已有文件已保留。",
+    }
 }
 
 fn read_health(state: &DatabaseState) -> Result<HealthReport, CommandError> {
     let guard = state.connection.lock().map_err(|_| unavailable())?;
     let connection = guard.as_ref().ok_or_else(unavailable)?;
-    let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0)).map_err(|_| unavailable())?;
-    if version != SCHEMA_VERSION { return Err(unavailable()); }
-    connection.query_row("SELECT id FROM settings WHERE id=1", [], |row| row.get::<_, i64>(0)).map_err(|_| unavailable())?;
-    Ok(HealthReport { schema_version: version, database_ready: true })
+    let version: i64 = connection
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .map_err(|_| unavailable())?;
+    if version != SCHEMA_VERSION {
+        return Err(unavailable());
+    }
+    connection
+        .query_row("SELECT id FROM settings WHERE id=1", [], |row| {
+            row.get::<_, i64>(0)
+        })
+        .map_err(|_| unavailable())?;
+    Ok(HealthReport {
+        schema_version: version,
+        database_ready: true,
+    })
 }
 
 #[tauri::command]
