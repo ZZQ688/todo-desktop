@@ -4,6 +4,9 @@ import { localToday, type LocalDate } from "../domain/local-date";
 import { DailyView } from "../features/daily/DailyView";
 import { ProjectsView } from "../features/projects/ProjectsView";
 import { SettingsView } from "../features/settings/SettingsView";
+import type { HealthCheck } from "../application/health";
+import { checkHealth } from "../infrastructure/tauri-health";
+import { useHealth } from "./useHealth";
 
 const views = [
   { id: "daily", label: "每日", Icon: CalendarDays },
@@ -12,9 +15,13 @@ const views = [
 ] as const;
 type View = (typeof views)[number]["id"];
 
-export function App({ today = localToday }: { today?: () => LocalDate }) {
+export function App({ today = localToday, getHealth = checkHealth }: {
+  today?: () => LocalDate;
+  getHealth?: HealthCheck;
+}) {
   const [view, setView] = useState<View>("daily");
   const [date, setDate] = useState(today);
+  const health = useHealth(getHealth);
 
   function moveTab(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const moves: Record<string, number> = {
@@ -43,6 +50,11 @@ export function App({ today = localToday }: { today?: () => LocalDate }) {
       </div>
     </aside>
     <main>
+      <p className="health-status" role={health.phase === "unavailable" && !health.desktopRequired ? "alert" : "status"}>
+        {health.phase === "loading" ? "正在连接本地数据" :
+          health.phase === "ready" ? "本地数据已连接" :
+          health.desktopRequired ? "未连接本地数据" : "本地数据无法打开。已有文件已保留。"}
+      </p>
       <section role="tabpanel" id="panel-daily" aria-labelledby="tab-daily" tabIndex={0} hidden={view !== "daily"}>
         <DailyView date={date} today={today()} onDateChange={setDate} />
       </section>
