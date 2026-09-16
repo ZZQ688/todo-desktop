@@ -1,0 +1,39 @@
+:root { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color: #242824;
+  background: #ffffff; font-size: 14px; letter-spacing: 0; font-synthesis: none; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+button, input { font: inherit; color: inherit; }
+button { min-height: 36px; border: 1px solid #d4d9d5; border-radius: 6px;
+  background: #ffffff; display: inline-flex; align-items: center; justify-content: center;
+  gap: 8px; padding: 6px 10px; cursor: pointer; }
+button:hover { background: #f0f3f1; }
+button:disabled { opacity: 0.45; cursor: default; }
+button:focus-visible, input:focus-visible, [role="tabpanel"]:focus-visible {
+  outline: 2px solid #187a49; outline-offset: 3px; }
+svg { width: 18px; height: 18px; flex: 0 0 18px; }
+.app-shell { min-height: 100dvh; display: grid; grid-template-columns: 176px minmax(0, 1fr); }
+.navigation { padding: 20px 12px; border-right: 1px solid #d4d9d5; background: #f5f6f5; }
+.brand { font-size: 20px; font-weight: 650; padding: 0 10px 20px; }
+.view-tabs { display: grid; gap: 6px; }
+.view-tabs button { justify-content: flex-start; border-color: transparent; background: transparent; }
+.view-tabs button[aria-selected="true"] { color: #116b3c; background: #e1f1e7; }
+main { min-width: 0; padding: 28px; }
+[role="tabpanel"] { min-width: 0; }
+h1 { margin: 0 0 24px; font-size: 22px; line-height: 1.3; overflow-wrap: anywhere; }
+.date-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.date-toolbar input { width: 156px; max-width: 100%; min-height: 36px;
+  border: 1px solid #d4d9d5; border-radius: 6px; padding: 6px; background: #ffffff; }
+.date-toolbar button[aria-label] { width: 36px; padding: 0; flex: 0 0 36px; }
+.empty-state { margin-top: 32px; padding: 20px 0; border-top: 1px solid #e5e8e5; color: #626862; }
+.settings-list { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 16px; }
+.settings-list dd { margin: 0; overflow-wrap: anywhere; }
+.health-status { margin: 0 0 18px; color: #626862; overflow-wrap: anywhere; }
+.health-status[role="alert"] { color: #a32c2c; }
+@media (max-width: 600px) {
+  .app-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  .navigation { padding: 12px; border-right: 0; border-bottom: 1px solid #d4d9d5; }
+  .brand { font-size: 18px; padding: 0 4px 10px; }
+  .view-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .view-tabs button { justify-content: center; }
+  main { padding: 20px 16px; }
+}
