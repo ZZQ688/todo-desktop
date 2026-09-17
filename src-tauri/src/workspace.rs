@@ -12,8 +12,6 @@ pub enum WorkspaceError {
     MissingProject(String),
     #[error("任务不存在: {0}")]
     MissingTask(String),
-    #[error("重复规则不存在: {0}")]
-    MissingRule(String),
     #[error("重复的生成游标批次")]
     StaleBatch,
     #[error(transparent)]
@@ -666,7 +664,7 @@ fn materialize(
 
 fn carryover(tx: &Transaction<'_>, today: &str) -> Result<(), WorkspaceError> {
     let mut stmt = tx.prepare(
-        "SELECT t.id, MAX(e.local_date) FROM tasks t JOIN daily_entries e ON e.task_id=t.id WHERE t.status='open' AND t.recurrence_source_id IS NULL AND e.local_date<?1 GROUP BY t.id",
+        "SELECT t.id, MAX(e.local_date) FROM tasks t JOIN daily_entries e ON e.task_id=t.id WHERE t.status='open' AND t.recurrence_source_id IS NULL AND t.repeat IS NULL AND e.local_date<?1 GROUP BY t.id",
     )?;
     let candidates: Vec<(String, String)> = stmt
         .query_map([today], |row| Ok((row.get(0)?, row.get(1)?)))?
@@ -874,9 +872,16 @@ pub fn migrate_recurrence_rules(tx: &Transaction<'_>) -> Result<(), WorkspaceErr
         })?;
         mapped.collect::<Result<Vec<_>, _>>()?
     };
-    for (id, template_json, rrule, start_date, _end_date, generated_through) in rows {
+    for (id, template_json, rrule, start_date, end_date, generated_through) in rows {
         let template: TaskTemplate = serde_json::from_str(&template_json)?;
         let repeat = repeat_from_rrule(&rrule)?;
+        // A future `end_date` cannot be represented in the new unbounded model, so it
+        // becomes recurring-until-stopped. A series whose end_date has already passed,
+        // however, must not be re-armed.
+        let repeat_value: Option<String> = match (&end_date, &generated_through) {
+            (Some(e), Some(g)) if g >= e => None, // series already finished: do not re-arm recurrence
+            _ => Some(serde_json::to_string(&repeat)?),
+        };
         let source_id = format!("series:{id}");
         let ts = format!("{start_date}T00:00:00Z");
         tx.execute(
@@ -887,7 +892,7 @@ pub fn migrate_recurrence_rules(tx: &Transaction<'_>) -> Result<(), WorkspaceErr
                 template.title,
                 priority_string(&template.priority),
                 template.due_date,
-                serde_json::to_string(&repeat)?,
+                repeat_value,
                 start_date,
                 generated_through,
                 ts

@@ -103,11 +103,34 @@ test("a project link context menu lists 重命名 and 删除", async () => {
   expect(screen.getByRole("menuitem", { name: "删除" })).toBeInTheDocument();
 });
 
-test("right-clicking empty space lists 新建任务 and 新建项目", async () => {
+test("right-clicking empty space in the daily view lists only 新建任务", async () => {
   render(<App repository={createMemoryRepository(workspace())} today={() => TODAY} />);
   const panel = await screen.findByRole("tabpanel", { name: "每日" });
   fireEvent.contextMenu(panel);
 
   expect(screen.getByRole("menuitem", { name: "新建任务" })).toBeInTheDocument();
+  expect(screen.queryByRole("menuitem", { name: "新建项目" })).not.toBeInTheDocument();
+});
+
+test("right-clicking empty space in the projects view lists only 新建项目", async () => {
+  const user = userEvent.setup();
+  render(<App repository={createMemoryRepository(workspace())} today={() => TODAY} />);
+  await user.click(await screen.findByRole("tab", { name: "项目" }));
+  const panel = await screen.findByRole("tabpanel", { name: "项目" });
+  fireEvent.contextMenu(panel);
+
   expect(screen.getByRole("menuitem", { name: "新建项目" })).toBeInTheDocument();
+  expect(screen.queryByRole("menuitem", { name: "新建任务" })).not.toBeInTheDocument();
+});
+
+test("clicking a search result opens the task editor", async () => {
+  const user = userEvent.setup();
+  render(<App repository={createMemoryRepository(workspace({
+    tasks: [task("t1", { title: "写周报" })],
+  }))} today={() => TODAY} />);
+
+  await user.type(await screen.findByLabelText("搜索任务"), "周报");
+  await user.click(screen.getByRole("button", { name: /写周报/ }));
+
+  expect(screen.getByRole("dialog", { name: "编辑任务" })).toBeInTheDocument();
 });

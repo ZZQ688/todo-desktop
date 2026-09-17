@@ -119,6 +119,19 @@ test("carryover adds a today entry but never changes createdOn", async () => {
   expect(result.entries.some((e) => e.taskId === "open" && e.localDate === day2 && e.carriedFromDate === day)).toBe(true);
 });
 
+test("carryover does not roll a recurring source task forward", async () => {
+  const source = task("series", { repeat: { freq: "daily", interval: 1 } });
+  const repo = createMemoryRepository({
+    tasks: [source],
+    projects: [],
+    entries: [{ id: "entry:series:2026-09-17", taskId: "series", localDate: day, carriedFromDate: null }],
+    settings,
+  });
+  const result = await repo.mutate({ kind: "carryover" }, day2);
+  expect(result.entries.filter((e) => e.taskId === "series")).toHaveLength(1);
+  expect(result.entries.some((e) => e.taskId === "series" && e.localDate === day2)).toBe(false);
+});
+
 test("addToToday is idempotent per task", async () => {
   const repo = createMemoryRepository();
   await repo.mutate({ kind: "saveTask", task: draft("t"), subtasks: [], scheduleToday: false }, day);

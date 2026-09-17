@@ -195,8 +195,8 @@ export function ContextMenu({ workspace, busy, error, run, view }: Props) {
         <button role="menuitem" className="danger" onClick={() => confirmDeleteProject(projectTarget)}>删除</button>
       </>}
       {!taskTarget && !projectTarget && <>
-        <button role="menuitem" onClick={newTask}>新建任务</button>
-        <button role="menuitem" onClick={newProject}>新建项目</button>
+        {view === "daily" && <button role="menuitem" onClick={newTask}>新建任务</button>}
+        {view === "projects" && <button role="menuitem" onClick={newProject}>新建项目</button>}
       </>}
     </div>}
     {editor && <TaskEditor workspace={workspace} task={editor.task} parentId={editor.parent?.id}

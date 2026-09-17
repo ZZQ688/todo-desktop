@@ -22,7 +22,6 @@ impl From<workspace::WorkspaceError> for CommandError {
             workspace::WorkspaceError::InvalidInput(_) => "invalid_input",
             workspace::WorkspaceError::MissingProject(_) => "missing_project",
             workspace::WorkspaceError::MissingTask(_) => "missing_task",
-            workspace::WorkspaceError::MissingRule(_) => "missing_rule",
             workspace::WorkspaceError::StaleBatch => "stale_batch",
             workspace::WorkspaceError::Sqlite(_) => "database_error",
             workspace::WorkspaceError::Json(_) => "invalid_rule",

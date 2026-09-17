@@ -16,8 +16,8 @@ function projectName(projectId: string | null, projects: Project[]): string {
   return projects.find(({ id }) => id === projectId)?.name ?? "未分组";
 }
 
-export function SearchResults({ query, tasks, projects }: {
-  query: string; tasks: Task[]; projects: Project[];
+export function SearchResults({ query, tasks, projects, onOpenTask }: {
+  query: string; tasks: Task[]; projects: Project[]; onOpenTask: (task: Task) => void;
 }) {
   const needle = query.trim().toLowerCase();
   const matches = tasks.filter((task) => task.title.toLowerCase().includes(needle));
@@ -26,9 +26,11 @@ export function SearchResults({ query, tasks, projects }: {
     {matches.length === 0 ? <p className="empty-state">没有匹配的任务</p> :
       <ul className="search-results">
         {matches.map((task) => <li key={task.id}>
-          <span className="search-result-title">{task.title}</span>
-          <span className="search-result-meta">{projectName(task.projectId, projects)} · {task.status === "completed" ? "已完成" : "未完成"}</span>
-          {task.recurrenceSourceId !== null && <span className="repeat-badge"><Repeat aria-hidden="true" />重复实例</span>}
+          <button type="button" className="search-result" onClick={() => onOpenTask(task)}>
+            <span className="search-result-title">{task.title}</span>
+            <span className="search-result-meta">{projectName(task.projectId, projects)} · {task.status === "completed" ? "已完成" : "未完成"}</span>
+            {task.recurrenceSourceId !== null && <span className="repeat-badge"><Repeat aria-hidden="true" />重复实例</span>}
+          </button>
         </li>)}
       </ul>}
   </section>;

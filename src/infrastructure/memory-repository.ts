@@ -359,7 +359,7 @@ function materialize(state: Workspace, batches: OccurrenceBatch[], now: string, 
 
 function carryover(state: Workspace, today: LocalDate) {
   for (const task of state.tasks) {
-    if (task.status !== "open" || task.recurrenceSourceId !== null) continue;
+    if (task.status !== "open" || task.recurrenceSourceId !== null || task.repeat !== null) continue;
     const past = state.entries
       .filter((entry) => entry.taskId === task.id && entry.localDate < today)
       .map((entry) => entry.localDate);

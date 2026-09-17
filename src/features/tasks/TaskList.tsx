@@ -104,7 +104,7 @@ function TaskRow({ task, children, contextual, projects, busy, run, onEdit, onAd
     {!contextual && !readOnly && <div className="row-actions">
       {!task.parentId && <button className="icon-button" aria-label={`添加 ${task.title} 的子任务`}
         title="添加子任务" onClick={() => onAddChild(task)} disabled={busy}><Plus aria-hidden="true" /></button>}
-      {onAddToToday && <button className="icon-button" aria-label={`加入 ${task.title} 到今日`}
+      {onAddToToday && task.repeat === null && <button className="icon-button" aria-label={`加入 ${task.title} 到今日`}
         title="加入今日" onClick={() => onAddToToday(task)} disabled={busy}><CalendarDays aria-hidden="true" /></button>}
       <button className="icon-button" aria-label={`编辑 ${task.title}`} title="编辑"
         onClick={() => onEdit(task)} disabled={busy}><Pencil aria-hidden="true" /></button>

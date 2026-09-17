@@ -2,12 +2,14 @@ import { useState, type KeyboardEvent } from "react";
 import { CalendarDays, Folder, Settings } from "lucide-react";
 import type { WorkspaceRepository } from "../application/workspace";
 import { localToday, type LocalDate } from "../domain/local-date";
+import type { Task } from "../domain/models";
 import { DailyView } from "../features/daily/DailyView";
 import { ProjectsView } from "../features/projects/ProjectsView";
 import { SettingsView } from "../features/settings/SettingsView";
 import { ContextMenu } from "../features/shared/ContextMenu";
 import { GlobalSearch, SearchResults } from "../features/shared/GlobalSearch";
 import { ModalActivityContext } from "../features/shared/ModalActivityContext";
+import { TaskEditor } from "../features/tasks/TaskEditor";
 import { useWorkspace } from "./useWorkspace";
 
 const views = [
@@ -24,6 +26,7 @@ export function App({ repository, today = localToday }: Props) {
   const [date, setDate] = useState(today);
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const workspace = useWorkspace(repository, today);
 
   function moveTab(event: KeyboardEvent<HTMLButtonElement>, index: number) {
@@ -66,7 +69,7 @@ export function App({ repository, today = localToday }: Props) {
         <span>{workspace.error}</span><button onClick={() => void workspace.refresh()} disabled={workspace.busy}>重试</button>
       </div>}
       {!workspace.data ? <p className="loading-state" role="status">正在打开任务…</p> : <>
-        {query.trim() !== "" ? <SearchResults query={query} tasks={workspace.data.tasks} projects={workspace.data.projects} /> : <>
+        {query.trim() !== "" ? <SearchResults query={query} tasks={workspace.data.tasks} projects={workspace.data.projects} onOpenTask={setEditingTask} /> : <>
           {view === "daily" && <section role="tabpanel" id="panel-daily" aria-labelledby="tab-daily" tabIndex={0}>
             <DailyView workspace={workspace.data} date={date} today={today} onDateChange={changeDate}
               busy={workspace.busy} error={workspace.error} run={workspace.run} />
@@ -82,6 +85,10 @@ export function App({ repository, today = localToday }: Props) {
     </main>
     {workspace.data && <ContextMenu workspace={workspace.data} busy={workspace.busy} error={workspace.error}
       run={workspace.run} view={view} />}
+    {workspace.data && editingTask && <TaskEditor workspace={workspace.data} task={editingTask}
+      scheduleToday={view === "daily"} initialProjectId={editingTask.projectId}
+      busy={workspace.busy} error={workspace.error} run={workspace.run}
+      onClose={() => setEditingTask(null)} />}
     </div>
   </ModalActivityContext.Provider>;
 }

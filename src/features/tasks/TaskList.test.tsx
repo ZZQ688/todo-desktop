@@ -57,6 +57,18 @@ test("fires onAddToToday with the task when the 加入今日 button is clicked",
   expect(onAddToToday).toHaveBeenCalledWith(t);
 });
 
+test("a recurring source row shows no 加入今日 button while a normal task does", () => {
+  renderList({
+    groups: [
+      { parent: task("source", { title: "晨跑", repeat: { freq: "daily", interval: 1 } }), children: [] },
+      { parent: task("plain", { title: "写报告" }), children: [] },
+    ],
+    onAddToToday: vi.fn(),
+  });
+  expect(screen.queryByRole("button", { name: "加入 晨跑 到今日" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "加入 写报告 到今日" })).toBeInTheDocument();
+});
+
 test("renders 建立于 createdOn in the task meta", () => {
   renderList({ groups: [{ parent: task("t1", { title: "写报告", createdOn: asLocalDate("2026-09-17") }), children: [] }] });
   expect(screen.getByText("建立于 2026-09-17")).toBeInTheDocument();

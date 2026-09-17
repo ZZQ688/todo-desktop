@@ -794,6 +794,34 @@ fn carryover_moves_open_tasks_forward_without_changing_created_on() {
 }
 
 #[test]
+fn carryover_skips_recurring_source_tasks() {
+    let mut connection = memory_database();
+    mutate_workspace(
+        &mut connection,
+        task("series", "Series", None, None, Some(repeat("daily", 1)), false),
+        "2026-09-17",
+    )
+    .unwrap();
+    // A recurring source that still carries a past daily entry (legacy layout).
+    connection
+        .execute(
+            "INSERT INTO daily_entries(id,task_id,local_date) VALUES ('entry:series:2026-09-15','series','2026-09-15')",
+            [],
+        )
+        .unwrap();
+
+    let loaded = mutate_workspace(&mut connection, Mutation::Carryover, "2026-09-17").unwrap();
+    assert!(!loaded
+        .entries
+        .iter()
+        .any(|e| e.task_id == "series" && e.local_date == "2026-09-17"));
+    assert_eq!(
+        loaded.entries.iter().filter(|e| e.task_id == "series").count(),
+        1
+    );
+}
+
+#[test]
 fn repeat_from_rrule_maps_legacy_strings() {
     assert_eq!(
         super::repeat_from_rrule("FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR").unwrap(),
@@ -883,6 +911,40 @@ fn load_workspace_returns_source_tasks_after_migration() {
         .unwrap();
     assert_eq!(instance.recurrence_source_id.as_deref(), Some("series:rule"));
     assert_eq!(loaded.entries.len(), 1);
+}
+
+#[test]
+fn migration_disarms_finished_legacy_series_but_keeps_active_ones() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("legacy.sqlite");
+    {
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(include_str!("../../migrations/001_initial.sql"))
+            .unwrap();
+        conn.execute_batch(include_str!("../../migrations/002_recurrence_cursor.sql"))
+            .unwrap();
+        conn.pragma_update(None, "user_version", 2).unwrap();
+        // A finished series: end_date is already behind generated_through.
+        conn.execute(
+            "INSERT INTO recurrence_rules(id,template_json,rrule,start_date,end_date,time_zone,generated_through) VALUES ('done',?1,'FREQ=DAILY','2026-09-01','2026-09-05','UTC','2026-09-10')",
+            [r#"{"projectId":null,"title":"Finished","priority":"normal","dueDate":null}"#],
+        )
+        .unwrap();
+        // An active series: no end_date.
+        conn.execute(
+            "INSERT INTO recurrence_rules(id,template_json,rrule,start_date,time_zone,generated_through) VALUES ('active',?1,'FREQ=DAILY','2026-09-01','UTC','2026-09-10')",
+            [r#"{"projectId":null,"title":"Active","priority":"normal","dueDate":null}"#],
+        )
+        .unwrap();
+    }
+
+    let connection = storage::open_database(&path).unwrap();
+    let loaded = load_workspace(&connection).unwrap();
+    let finished = loaded.tasks.iter().find(|t| t.id == "series:done").unwrap();
+    assert_eq!(finished.repeat, None);
+    let active = loaded.tasks.iter().find(|t| t.id == "series:active").unwrap();
+    assert_eq!(active.repeat.as_ref().unwrap().freq, "daily");
+    assert_eq!(active.repeat.as_ref().unwrap().interval, 1);
 }
 
 #[test]
