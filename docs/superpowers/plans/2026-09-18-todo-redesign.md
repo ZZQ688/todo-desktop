@@ -18,7 +18,7 @@
 - 子任务只支持一层（沿用现有 trigger 约束）。
 - 所有 mutation 走事务，全有或全无。
 - 本地日期格式 `YYYY-MM-DD`，校验沿用 `validate_date`。
-- 测试命令：前端 `npm test`；后端 `cargo test --manifest-path src-tauri/Cargo.toml`；类型 `npm run typecheck`。
+- 测试命令：前端 `npm test`；类型 `npm run typecheck`；后端（CI/Windows，含 Tauri）`cargo test --manifest-path src-tauri/Cargo.toml`，本地 Linux（无 GTK）用 `cargo test --no-default-features --lib --manifest-path src-tauri/Cargo.toml`（`tauri` 已被 feature-gate 掉，核心 storage/workspace 测试在此命令下运行）。
 
 ---
 
@@ -93,12 +93,14 @@ UPDATE tasks SET created_on = substr(created_at, 1, 10);
 CREATE TABLE recurrence_occurrences_v2 (
   source_task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
   occurrence_date TEXT NOT NULL CHECK(length(occurrence_date)=10 AND date(occurrence_date,'+0 days') IS occurrence_date AND substr(occurrence_date,1,4) BETWEEN '0001' AND '9999'),
-  task_id TEXT NOT NULL UNIQUE REFERENCES tasks(id) ON DELETE CASCADE,
+  task_id TEXT UNIQUE REFERENCES tasks(id) ON DELETE SET NULL,
   PRIMARY KEY(source_task_id, occurrence_date)
 );
 ```
 
 （Rust 侧随后把 `recurrence_rules` 数据迁移成源任务并回填 `recurrence_occurrences_v2`，再 drop 旧表。见 Step 3。）
+
+> `task_id` 用 `ON DELETE SET NULL`（可空）：删除单个实例任务时，`(source_task_id, occurrence_date)` 行保留为 tombstone、`task_id` 自动置 NULL，从而「删实例不重生成」；删除源任务则 `source_task_id` 的 `ON DELETE CASCADE` 清掉整系列。
 
 - [ ] **Step 2: 写失败测试（迁移 + 结构体）**
 
