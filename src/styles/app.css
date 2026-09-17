@@ -203,6 +203,18 @@ main { min-width: 0; width: 100%; max-width: 1120px; padding: 25px 30px 50px; }
 .field { min-width: 0; display: grid; gap: 6px; color: #555d57; font-size: 13px; font-weight: 550; }
 .field-wide { grid-column: 1 / -1; }
 .form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 5px; }
+.priority-dots { display: flex; align-items: center; gap: 8px; }
+.priority-dot { width: 38px; min-width: 38px; height: 38px; padding: 0; border-radius: 50%; }
+.priority-dot-swatch { width: 18px; height: 18px; border-radius: 50%; }
+.priority-dot-low .priority-dot-swatch { background: #3f9d3f; }
+.priority-dot-normal .priority-dot-swatch { background: #e0b72f; }
+.priority-dot-high .priority-dot-swatch { background: #d9413a; }
+.priority-dot.selected { border-color: #176d45; box-shadow: 0 0 0 2px #176d45; }
+.subtasks-field { min-width: 0; margin: 0; padding: 0; border: 0; }
+.subtasks-field legend { padding: 0 0 6px; color: #555d57; font-size: 13px; font-weight: 550; }
+.subtask-edit-list { list-style: none; margin: 0 0 7px; padding: 0; display: grid; gap: 6px; }
+.subtask-edit-row { display: flex; align-items: center; gap: 6px; }
+.subtask-edit-row input { flex: 1; }
 .settings-section {
   display: grid;
   grid-template-columns: minmax(160px, 1fr) minmax(260px, 2fr);
