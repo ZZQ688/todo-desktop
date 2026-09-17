@@ -52,7 +52,9 @@ fn connection<'a>(
 fn reopen(state: &DatabaseState, connection: &mut Option<rusqlite::Connection>) {
     if connection.is_none() {
         if let Some(parent) = state.path.parent() {
-            if std::fs::create_dir_all(parent).is_err() { return; }
+            if std::fs::create_dir_all(parent).is_err() {
+                return;
+            }
         }
         *connection = crate::storage::open_database(&state.path).ok();
     }
@@ -64,7 +66,7 @@ pub fn load_workspace(state: tauri::State<'_, DatabaseState>) -> Result<Workspac
     reopen(state.inner(), &mut guard);
     let db = guard.as_ref().ok_or_else(|| CommandError {
         code: "database_unavailable".into(),
-        message: "本地数据无法打开。".into(),
+        message: "本地数据无法打开，请检查文件权限后重试。".into(),
     })?;
     workspace::load_workspace(db).map_err(Into::into)
 }
@@ -82,4 +84,27 @@ pub fn mutate_workspace(
         message: "本地数据无法打开。".into(),
     })?;
     workspace::mutate_workspace(db, mutation, &today).map_err(Into::into)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retries_same_database_after_transient_startup_failure() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("todo.sqlite");
+        std::fs::create_dir(&path).unwrap();
+        let state = DatabaseState {
+            connection: Mutex::new(None),
+            path: path.clone(),
+        };
+        let mut guard = state.connection.lock().unwrap();
+        reopen(&state, &mut guard);
+        assert!(guard.is_none());
+        std::fs::remove_dir(&path).unwrap();
+        reopen(&state, &mut guard);
+        assert!(guard.is_some());
+        assert!(path.is_file());
+    }
 }
