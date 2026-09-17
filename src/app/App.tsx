@@ -1,12 +1,12 @@
 import { useState, type KeyboardEvent } from "react";
 import { CalendarDays, Folder, Settings } from "lucide-react";
+import type { WorkspaceRepository } from "../application/workspace";
 import { localToday, type LocalDate } from "../domain/local-date";
 import { DailyView } from "../features/daily/DailyView";
 import { ProjectsView } from "../features/projects/ProjectsView";
 import { SettingsView } from "../features/settings/SettingsView";
-import type { HealthCheck } from "../application/health";
-import { checkHealth } from "../infrastructure/tauri-health";
-import { useHealth } from "./useHealth";
+import { ModalActivityContext } from "../features/shared/ModalActivityContext";
+import { useWorkspace } from "./useWorkspace";
 
 const views = [
   { id: "daily", label: "每日", Icon: CalendarDays },
@@ -15,13 +15,13 @@ const views = [
 ] as const;
 type View = (typeof views)[number]["id"];
 
-export function App({ today = localToday, getHealth = checkHealth }: {
-  today?: () => LocalDate;
-  getHealth?: HealthCheck;
-}) {
+interface Props { repository?: WorkspaceRepository; today?: () => LocalDate }
+
+export function App({ repository, today = localToday }: Props) {
   const [view, setView] = useState<View>("daily");
   const [date, setDate] = useState(today);
-  const health = useHealth(getHealth);
+  const [modalOpen, setModalOpen] = useState(false);
+  const workspace = useWorkspace(repository, today);
 
   function moveTab(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const moves: Record<string, number> = {
@@ -39,7 +39,14 @@ export function App({ today = localToday, getHealth = checkHealth }: {
     document.getElementById(`tab-${views[next].id}`)?.focus();
   }
 
-  return <div className="app-shell">
+  function changeDate(next: LocalDate) {
+    setDate(next);
+    void workspace.ensureDate(next);
+  }
+
+  const density = workspace.data?.settings.density ?? "comfortable";
+  return <ModalActivityContext.Provider value={setModalOpen}>
+    <div className={`app-shell density-${density}`} aria-busy={workspace.busy}>
     <aside className="navigation">
       <div className="brand">待办</div>
       <div className="view-tabs" role="tablist" aria-label="视图">
@@ -48,22 +55,25 @@ export function App({ today = localToday, getHealth = checkHealth }: {
           tabIndex={view === id ? 0 : -1} onKeyDown={(event) => moveTab(event, index)}
           onClick={() => setView(id)}><Icon aria-hidden="true" />{label}</button>)}
       </div>
+      {workspace.demo && <p className="demo-notice">浏览器演示 · 关闭页面后清空</p>}
     </aside>
     <main>
-      <p className="health-status" role={health.phase === "unavailable" && !health.desktopRequired ? "alert" : "status"}>
-        {health.phase === "loading" ? "正在连接本地数据" :
-          health.phase === "ready" ? "本地数据已连接" :
-          health.desktopRequired ? "未连接本地数据" : "本地数据无法打开。已有文件已保留。"}
-      </p>
-      <section role="tabpanel" id="panel-daily" aria-labelledby="tab-daily" tabIndex={0} hidden={view !== "daily"}>
-        <DailyView date={date} today={today} onDateChange={setDate} />
-      </section>
-      <section role="tabpanel" id="panel-projects" aria-labelledby="tab-projects" tabIndex={0} hidden={view !== "projects"}>
-        <ProjectsView />
-      </section>
-      <section role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" tabIndex={0} hidden={view !== "settings"}>
-        <SettingsView />
-      </section>
+      {workspace.error && !modalOpen && <div className="error-banner" role="alert">
+        <span>{workspace.error}</span><button onClick={() => void workspace.refresh()} disabled={workspace.busy}>重试</button>
+      </div>}
+      {!workspace.data ? <p className="loading-state" role="status">正在打开任务…</p> : <>
+        {view === "daily" && <section role="tabpanel" id="panel-daily" aria-labelledby="tab-daily" tabIndex={0}>
+          <DailyView workspace={workspace.data} date={date} today={today} onDateChange={changeDate}
+            busy={workspace.busy} error={workspace.error} run={workspace.run} />
+        </section>}
+        {view === "projects" && <section role="tabpanel" id="panel-projects" aria-labelledby="tab-projects" tabIndex={0}>
+          <ProjectsView workspace={workspace.data} busy={workspace.busy} error={workspace.error} run={workspace.run} />
+        </section>}
+        {view === "settings" && <section role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" tabIndex={0}>
+          <SettingsView workspace={workspace.data} busy={workspace.busy} run={workspace.run} today={today} />
+        </section>}
+      </>}
     </main>
-  </div>;
+    </div>
+  </ModalActivityContext.Provider>;
 }

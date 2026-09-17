@@ -1,5 +1,6 @@
 mod commands;
 pub mod storage;
+pub mod workspace;
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -20,7 +21,10 @@ pub fn run() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![commands::health_check])
+        .invoke_handler(tauri::generate_handler![
+            commands::load_workspace,
+            commands::mutate_workspace
+        ])
         .run(tauri::generate_context!())
         .expect("Failed to run the desktop application");
 }

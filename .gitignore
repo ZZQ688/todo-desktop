@@ -9,6 +9,7 @@
 /.agents/
 /.codex/
 /TODO.docx
+/Daily Todo_*-setup.exe
 .env
 .env.*
 !.env.example

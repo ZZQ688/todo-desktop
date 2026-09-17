@@ -14,8 +14,8 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      - run: npx cross-env TZ=Asia/Shanghai npm test -- src/domain/local-date.test.ts
-      - run: npx cross-env TZ=America/New_York npm test -- src/domain/local-date.test.ts
+      - run: npx cross-env TZ=Asia/Shanghai npm test -- src/domain/local-date.test.ts src/infrastructure/rrule-expander.test.ts
+      - run: npx cross-env TZ=America/New_York npm test -- src/domain/local-date.test.ts src/infrastructure/rrule-expander.test.ts
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

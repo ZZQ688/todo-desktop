@@ -61,15 +61,68 @@ fn failed_migration_rolls_back_and_preserves_existing_data() {
 #[test]
 fn refuses_a_newer_schema_without_downgrading_it() {
     let mut conn = Connection::open_in_memory().unwrap();
-    conn.pragma_update(None, "user_version", 2).unwrap();
+    let newer = SCHEMA_VERSION + 1;
+    conn.pragma_update(None, "user_version", newer).unwrap();
     assert!(matches!(
         initialize(&mut conn),
-        Err(StorageError::UnsupportedVersion(2))
+        Err(StorageError::UnsupportedVersion(version)) if version == newer
     ));
     let version: i64 = conn
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 2);
+    assert_eq!(version, newer);
+}
+
+#[test]
+fn migrates_version_one_rules_with_a_nullable_generation_cursor() {
+    let mut conn = Connection::open_in_memory().unwrap();
+    conn.execute_batch(include_str!("../../migrations/001_initial.sql"))
+        .unwrap();
+    conn.pragma_update(None, "user_version", 1).unwrap();
+    conn.execute(
+        "INSERT INTO recurrence_rules(id,template_json,rrule,start_date,time_zone)
+         VALUES ('rule',?1,'FREQ=DAILY','2026-09-16','Asia/Shanghai')",
+        [r#"{"projectId":null,"title":"Task","priority":"normal","dueDate":null}"#],
+    )
+    .unwrap();
+    insert_task(&conn, "scheduled", None).unwrap();
+    conn.execute(
+        "INSERT INTO daily_entries(id,task_id,local_date) VALUES ('entry','scheduled','2026-09-15')",
+        [],
+    )
+    .unwrap();
+
+    initialize(&mut conn).unwrap();
+
+    let cursor: Option<String> = conn
+        .query_row(
+            "SELECT generated_through FROM recurrence_rules WHERE id='rule'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let settings_version: i64 = conn
+        .query_row(
+            "SELECT schema_version FROM settings WHERE id=1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let scheduled_date: Option<String> = conn
+        .query_row(
+            "SELECT scheduled_date FROM tasks WHERE id='scheduled'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(cursor, None);
+    assert_eq!(scheduled_date.as_deref(), Some("2026-09-15"));
+    assert_eq!(settings_version, 1);
+    assert_eq!(
+        conn.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
+            .unwrap(),
+        SCHEMA_VERSION
+    );
 }
 
 #[test]

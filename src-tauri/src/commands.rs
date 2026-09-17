@@ -1,84 +1,72 @@
 use std::sync::Mutex;
 
-use rusqlite::Connection;
 use serde::Serialize;
 
-use crate::storage::SCHEMA_VERSION;
+use crate::workspace::{self, Mutation, Workspace};
 
 pub struct DatabaseState {
-    pub connection: Mutex<Option<Connection>>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HealthReport {
-    pub schema_version: i64,
-    pub database_ready: bool,
+    pub connection: Mutex<Option<rusqlite::Connection>>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct CommandError {
-    pub code: &'static str,
-    pub message: &'static str,
+    pub code: String,
+    pub message: String,
 }
 
-fn unavailable() -> CommandError {
-    CommandError {
-        code: "database_unavailable",
-        message: "本地数据无法打开。已有文件已保留。",
+impl From<workspace::WorkspaceError> for CommandError {
+    fn from(error: workspace::WorkspaceError) -> Self {
+        let code = match &error {
+            workspace::WorkspaceError::InvalidInput(_) => "invalid_input",
+            workspace::WorkspaceError::MissingProject(_) => "missing_project",
+            workspace::WorkspaceError::MissingTask(_) => "missing_task",
+            workspace::WorkspaceError::MissingRule(_) => "missing_rule",
+            workspace::WorkspaceError::StaleBatch => "stale_batch",
+            workspace::WorkspaceError::Sqlite(_) => "database_error",
+            workspace::WorkspaceError::Json(_) => "invalid_rule",
+        };
+        let detail = error.to_string();
+        let message = match &error {
+            workspace::WorkspaceError::Sqlite(_) => format!("本地数据操作失败：{detail}"),
+            workspace::WorkspaceError::Json(_) => format!("重复规则数据无效：{detail}"),
+            _ => detail,
+        };
+        Self {
+            code: code.into(),
+            message,
+        }
     }
 }
 
-fn read_health(state: &DatabaseState) -> Result<HealthReport, CommandError> {
-    let guard = state.connection.lock().map_err(|_| unavailable())?;
-    let connection = guard.as_ref().ok_or_else(unavailable)?;
-    let version: i64 = connection
-        .pragma_query_value(None, "user_version", |row| row.get(0))
-        .map_err(|_| unavailable())?;
-    if version != SCHEMA_VERSION {
-        return Err(unavailable());
-    }
-    connection
-        .query_row("SELECT id FROM settings WHERE id=1", [], |row| {
-            row.get::<_, i64>(0)
-        })
-        .map_err(|_| unavailable())?;
-    Ok(HealthReport {
-        schema_version: version,
-        database_ready: true,
+fn connection<'a>(
+    state: &'a DatabaseState,
+) -> Result<std::sync::MutexGuard<'a, Option<rusqlite::Connection>>, CommandError> {
+    state.connection.lock().map_err(|_| CommandError {
+        code: "database_unavailable".into(),
+        message: "本地数据无法打开。".into(),
     })
 }
 
 #[tauri::command]
-pub fn health_check(state: tauri::State<'_, DatabaseState>) -> Result<HealthReport, CommandError> {
-    read_health(state.inner())
+pub fn load_workspace(state: tauri::State<'_, DatabaseState>) -> Result<Workspace, CommandError> {
+    let guard = connection(state.inner())?;
+    let db = guard.as_ref().ok_or_else(|| CommandError {
+        code: "database_unavailable".into(),
+        message: "本地数据无法打开。".into(),
+    })?;
+    workspace::load_workspace(db).map_err(Into::into)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{read_health, DatabaseState};
-    use crate::storage;
-    use rusqlite::Connection;
-    use std::sync::Mutex;
-
-    #[test]
-    fn reports_initialized_storage() {
-        let mut connection = Connection::open_in_memory().unwrap();
-        storage::initialize(&mut connection).unwrap();
-        let state = DatabaseState {
-            connection: Mutex::new(Some(connection)),
-        };
-        let report = read_health(&state).unwrap();
-        assert_eq!(report.schema_version, 1);
-        assert!(report.database_ready);
-    }
-
-    #[test]
-    fn failed_startup_does_not_report_ready() {
-        let state = DatabaseState {
-            connection: Mutex::new(None),
-        };
-        let error = read_health(&state).unwrap_err();
-        assert_eq!(error.code, "database_unavailable");
-    }
+#[tauri::command]
+pub fn mutate_workspace(
+    state: tauri::State<'_, DatabaseState>,
+    mutation: Mutation,
+    today: String,
+) -> Result<Workspace, CommandError> {
+    let mut guard = connection(state.inner())?;
+    let db = guard.as_mut().ok_or_else(|| CommandError {
+        code: "database_unavailable".into(),
+        message: "本地数据无法打开。".into(),
+    })?;
+    workspace::mutate_workspace(db, mutation, &today).map_err(Into::into)
 }

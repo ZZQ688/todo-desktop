@@ -11,6 +11,7 @@ export interface Project {
 export interface Task {
   id: EntityId; projectId: EntityId | null; parentId: EntityId | null;
   title: string; status: TaskStatus; priority: Priority; dueDate: LocalDate | null;
+  scheduledDate: LocalDate | null;
   completedAt: UtcInstant | null; createdAt: UtcInstant; updatedAt: UtcInstant;
 }
 export interface DailyEntry {

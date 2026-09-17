@@ -3,7 +3,7 @@ use std::path::Path;
 use rusqlite::Connection;
 use thiserror::Error;
 
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -26,6 +26,14 @@ pub fn initialize(connection: &mut Connection) -> Result<(), StorageError> {
         0 => {
             let transaction = connection.transaction()?;
             transaction.execute_batch(include_str!("../migrations/001_initial.sql"))?;
+            transaction.execute_batch(include_str!("../migrations/002_recurrence_cursor.sql"))?;
+            transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+            validate_schema(&transaction)?;
+            transaction.commit()?;
+        }
+        1 => {
+            let transaction = connection.transaction()?;
+            transaction.execute_batch(include_str!("../migrations/002_recurrence_cursor.sql"))?;
             transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
             validate_schema(&transaction)?;
             transaction.commit()?;
@@ -38,10 +46,12 @@ pub fn initialize(connection: &mut Connection) -> Result<(), StorageError> {
 }
 
 fn validate_schema(connection: &Connection) -> Result<(), StorageError> {
-    connection.prepare("SELECT id,title,status,priority FROM tasks LIMIT 0")?;
+    connection.prepare("SELECT id,title,status,priority,scheduled_date FROM tasks LIMIT 0")?;
+    connection.prepare("SELECT id,generated_through FROM recurrence_rules LIMIT 0")?;
     connection.prepare("SELECT schema_version,locale,density FROM settings WHERE id=1")?;
     Ok(())
 }
 
 #[cfg(test)]
+#[path = "storage/tests.rs"]
 mod tests;
