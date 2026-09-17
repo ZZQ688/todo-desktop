@@ -1,14 +1,13 @@
 import type { LocalDate } from "../domain/local-date";
-import type { DailyEntry, Project, RecurrenceRule, Settings, Task } from "../domain/models";
+import type { DailyEntry, Project, RepeatRule, Settings, Task } from "../domain/models";
 
-export interface StoredRule extends RecurrenceRule { generatedThrough: LocalDate | null }
 export interface Workspace {
   tasks: Task[];
   projects: Project[];
   entries: DailyEntry[];
-  rules: StoredRule[];
   settings: Settings;
 }
+
 export interface TaskDraft {
   id: string;
   title: string;
@@ -16,25 +15,30 @@ export interface TaskDraft {
   parentId: string | null;
   priority: Task["priority"];
   dueDate: LocalDate | null;
-  scheduledDate: LocalDate | null;
+  repeat: RepeatRule | null;
 }
+
+export interface SubtaskDraft { id: string; title: string; }
+
 export interface OccurrenceBatch {
-  ruleId: string;
+  sourceTaskId: string;
   expectedThrough: LocalDate | null;
   through: LocalDate;
   dates: LocalDate[];
 }
+
 export type Mutation =
-  | { kind: "saveTask"; task: TaskDraft }
-  | { kind: "setCompletion"; id: string; completed: boolean }
-  | { kind: "deleteTask"; id: string }
+  | { kind: "saveTask"; task: TaskDraft; subtasks: SubtaskDraft[]; scheduleToday: boolean }
+  | { kind: "setCompletion"; ids: string[]; completed: boolean }
+  | { kind: "deleteTasks"; ids: string[] }
+  | { kind: "addToToday"; ids: string[] }
+  | { kind: "moveToGroup"; ids: string[]; projectId: string | null }
   | { kind: "saveProject"; id: string; name: string }
   | { kind: "deleteProject"; id: string }
   | { kind: "saveSettings"; density: Settings["density"] }
-  | { kind: "saveRule"; rule: RecurrenceRule }
-  | { kind: "deleteRule"; id: string }
   | { kind: "materialize"; batches: OccurrenceBatch[] }
   | { kind: "carryover" };
+
 export interface WorkspaceRepository {
   readonly demo: boolean;
   load(): Promise<Workspace>;

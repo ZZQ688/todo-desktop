@@ -1,10 +1,11 @@
 import type { LocalDate } from "../domain/local-date";
-import type { EntityId, RecurrenceRule } from "../domain/models";
+import type { EntityId, Task } from "../domain/models";
 
-export interface OccurrenceCandidate { ruleId: EntityId; date: LocalDate }
+export interface OccurrenceCandidate { sourceTaskId: EntityId; date: LocalDate }
+
 export interface RecurrenceExpander {
   expand(
-    rule: RecurrenceRule,
+    task: Task,
     range: { start: LocalDate; end: LocalDate },
   ): readonly OccurrenceCandidate[];
 }

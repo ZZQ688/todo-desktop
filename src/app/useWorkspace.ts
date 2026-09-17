@@ -50,7 +50,8 @@ export function useWorkspace(repository: WorkspaceRepository = workspaceReposito
   }, [publish]);
 
   const expand = useCallback(async (current: Workspace, through: LocalDate) => {
-    const batches = current.rules.map((rule) => expandBatch(rule, through))
+    const batches = current.tasks.filter((task) => task.repeat)
+      .map((task) => expandBatch(task, through))
       .filter((batch): batch is OccurrenceBatch => batch !== null);
     return batches.length ? repository.mutate({ kind: "materialize", batches }, today()) : current;
   }, [repository, today]);
@@ -79,15 +80,11 @@ export function useWorkspace(repository: WorkspaceRepository = workspaceReposito
   const run = useCallback((mutation: Mutation) => enqueue(async () => {
     const day = today();
     const through = horizon.current > day ? horizon.current : day;
-    if (mutation.kind === "saveRule") {
-      const previous = snapshot.current?.rules.find((rule) => rule.id === mutation.rule.id);
-      expandBatch({ ...mutation.rule, generatedThrough: previous?.generatedThrough ?? null }, through);
-    }
     const result = publish(await repository.mutate(mutation, day));
-    if (mutation.kind === "saveRule") {
+    if (mutation.kind === "saveTask" && mutation.task.repeat) {
       try { return await expand(result, through); }
       catch (failure) {
-        if (mounted.current) setError(`规则已保存，但重复任务生成失败：${errorMessage(failure)}`);
+        if (mounted.current) setError(`任务已保存，但重复任务生成失败：${errorMessage(failure)}`);
       }
     }
     return result;
