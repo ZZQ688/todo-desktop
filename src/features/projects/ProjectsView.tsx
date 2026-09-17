@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type FormEvent } from "react";
-import { Folder, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Folder, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { Mutation, Workspace } from "../../application/workspace";
 import type { Project, Task } from "../../domain/models";
 import { InlineMutationError } from "../shared/InlineMutationError";
@@ -14,6 +14,10 @@ interface Props {
   run: (mutation: Mutation) => Promise<boolean>;
 }
 type EditorState = { task?: Task; parent?: Task } | null;
+
+function isInstanceTask(task: Task): boolean {
+  return task.recurrenceSourceId !== null;
+}
 
 function ProjectDialog({ project, busy, error, run, onClose }: {
   project?: Project; busy: boolean; error: string | null; run: Props["run"]; onClose: () => void;
@@ -64,7 +68,7 @@ function DeleteProjectDialog({ project, busy, error, run, onClose, onDeleted }: 
     aria-modal="true" aria-labelledby="delete-project-title"
     onKeyDown={(event) => { trapFocus(event); if (event.key === "Escape" && !busy) onClose(); }}>
     <div className="modal-heading"><h2 id="delete-project-title">删除项目？</h2></div>
-    <p>项目“{project.name}”会被删除，里面的任务会保留到“无项目”。</p>
+    <p>项目“{project.name}”会被删除，里面的任务会保留到“未分组”。</p>
     <InlineMutationError show={failed} error={error} />
     <div className="form-actions"><button ref={cancelRef} onClick={onClose} disabled={busy}>取消</button>
       <button className="danger-button" disabled={busy} onClick={() => void removeProject()}>删除项目</button></div>
@@ -73,7 +77,6 @@ function DeleteProjectDialog({ project, busy, error, run, onClose, onDeleted }: 
 
 export function ProjectsView({ workspace, busy, error, run }: Props) {
   const [selected, setSelected] = useState("all");
-  const [query, setQuery] = useState("");
   const [status, setStatus] = useState<"all" | "open" | "completed">("all");
   const [editor, setEditor] = useState<EditorState>(null);
   const [projectEditor, setProjectEditor] = useState<Project | "new" | null>(null);
@@ -83,24 +86,19 @@ export function ProjectsView({ workspace, busy, error, run }: Props) {
   const groups = useMemo(() => {
     const inSelection = (task: Task) => selected === "all" ||
       (selected === "none" ? task.projectId === null : task.projectId === selected);
-    const roots = workspace.tasks.filter((task) => task.parentId === null && inSelection(task));
-    const needle = query.trim().toLocaleLowerCase("zh-CN");
+    const roots = workspace.tasks.filter((task) =>
+      task.parentId === null && !isInstanceTask(task) && inSelection(task));
     return roots.flatMap((parent): TaskGroup[] => {
-      const allChildren = workspace.tasks.filter((task) => task.parentId === parent.id && inSelection(task));
-      const parentMatches = parent.title.toLocaleLowerCase("zh-CN").includes(needle);
-      const children = allChildren.filter((child) => {
-        const searchMatches = !needle || parentMatches || child.title.toLocaleLowerCase("zh-CN").includes(needle);
-        return searchMatches && (status === "all" || child.status === status);
-      });
-      if ((!needle || parentMatches) && (status === "all" || parent.status === status)) {
-        return [{ parent, children }];
-      }
+      const children = workspace.tasks.filter((task) =>
+        task.parentId === parent.id && !isInstanceTask(task) && inSelection(task) &&
+        (status === "all" || task.status === status));
+      if (status === "all" || parent.status === status) return [{ parent, children }];
       return children.length ? [{ parent, children, contextualParent: true }] : [];
     });
-  }, [query, selected, status, workspace.tasks]);
+  }, [selected, status, workspace.tasks]);
 
   return <>
-    <header className="view-heading"><div><h1>项目</h1><p>{selectedProject?.name ?? (selected === "none" ? "无项目" : "全部任务")}</p></div>
+    <header className="view-heading"><div><h1>项目</h1><p>{selectedProject?.name ?? (selected === "none" ? "未分组" : "全部任务")}</p></div>
       <button className="primary-button" onClick={() => setEditor({})}><Plus aria-hidden="true" />新建任务</button>
     </header>
     <div className="project-layout">
@@ -110,19 +108,17 @@ export function ProjectsView({ workspace, busy, error, run }: Props) {
             <Plus aria-hidden="true" /></button></div>
         <button className={selected === "all" ? "project-link selected" : "project-link"}
           onClick={() => setSelected("all")}><Folder aria-hidden="true" />全部任务
-          <span>{workspace.tasks.filter((task) => !task.parentId).length}</span></button>
+          <span>{workspace.tasks.filter((task) => !task.parentId && !isInstanceTask(task)).length}</span></button>
         <button className={selected === "none" ? "project-link selected" : "project-link"}
-          onClick={() => setSelected("none")}><Folder aria-hidden="true" />无项目
-          <span>{workspace.tasks.filter((task) => !task.parentId && !task.projectId).length}</span></button>
+          onClick={() => setSelected("none")}><Folder aria-hidden="true" />未分组
+          <span>{workspace.tasks.filter((task) => !task.parentId && !task.projectId && !isInstanceTask(task)).length}</span></button>
         {workspace.projects.map((project) => <button key={project.id}
           className={selected === project.id ? "project-link selected" : "project-link"}
           onClick={() => setSelected(project.id)}><Folder aria-hidden="true" />{project.name}
-          <span>{workspace.tasks.filter((task) => !task.parentId && task.projectId === project.id).length}</span></button>)}
+          <span>{workspace.tasks.filter((task) => !task.parentId && task.projectId === project.id && !isInstanceTask(task)).length}</span></button>)}
       </aside>
       <div className="project-content">
         <div className="filter-toolbar project-tools">
-          <label className="search-field"><Search aria-hidden="true" /><span className="sr-only">搜索任务</span>
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索任务" /></label>
           <label><span className="sr-only">任务状态</span><select value={status}
             onChange={(event) => setStatus(event.target.value as typeof status)} aria-label="任务状态">
             <option value="all">全部状态</option><option value="open">未完成</option><option value="completed">已完成</option>
@@ -135,11 +131,12 @@ export function ProjectsView({ workspace, busy, error, run }: Props) {
           </div>}
         </div>
         <TaskList groups={groups} tasks={workspace.tasks} projects={workspace.projects} busy={busy} error={error} run={run}
-          onEdit={(task) => setEditor({ task })} onAddChild={(parent) => setEditor({ parent })} />
+          onEdit={(task) => setEditor({ task })} onAddChild={(parent) => setEditor({ parent })}
+          onAddToToday={(task) => void run({ kind: "addToToday", ids: [task.id] })} />
       </div>
     </div>
     {editor && <TaskEditor workspace={workspace} task={editor.task} parentId={editor.parent?.id}
-      initialProjectId={editor.parent?.projectId ?? selectedProject?.id ?? null} busy={busy} run={run}
+      initialProjectId={editor.parent?.projectId ?? selectedProject?.id ?? null} scheduleToday={false} busy={busy} run={run}
       error={error}
       onClose={() => setEditor(null)} />}
     {projectEditor && <ProjectDialog project={projectEditor === "new" ? undefined : projectEditor} busy={busy} error={error}
