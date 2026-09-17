@@ -133,7 +133,7 @@ main { min-width: 0; width: 100%; max-width: 1120px; padding: 25px 30px 50px; }
   padding-left: 8px;
   border-left: 2px solid #d9e5dc;
 }
-.task-list, .subtask-list, .rule-list { list-style: none; margin: 0; padding: 0; }
+.task-list, .subtask-list { list-style: none; margin: 0; padding: 0; }
 .task-list { border-top: 1px solid #dfe3e0; }
 .task-list > li, .subtask-list > li { border-bottom: 1px solid #e2e6e3; }
 .task-row {
@@ -191,7 +191,6 @@ main { min-width: 0; width: 100%; max-width: 1120px; padding: 25px 30px 50px; }
 }
 .multi-select-count { font-weight: 650; color: #0f683d; margin-right: auto; }
 .multi-select-bar select { width: 150px; }
-.compact-empty { padding: 15px 0; }
 .error-banner {
   display: flex;
   align-items: center;
@@ -257,7 +256,7 @@ main { min-width: 0; width: 100%; max-width: 1120px; padding: 25px 30px 50px; }
   color: #68706a;
   background: #f1f3f1;
 }
-.editor-form, .recurrence-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.editor-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
 .field { min-width: 0; display: grid; gap: 6px; color: #555d57; font-size: 13px; font-weight: 550; }
 .field-wide { grid-column: 1 / -1; }
 .form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 5px; }
@@ -286,13 +285,6 @@ main { min-width: 0; width: 100%; max-width: 1120px; padding: 25px 30px 50px; }
 .segmented button { border: 0; border-radius: 0; min-width: 76px; }
 .segmented button + button { border-left: 1px solid #cbd2cd; }
 .segmented button.selected { color: #fff; background: #176d45; }
-.recurrence-section { align-items: start; }
-.recurrence-form { min-width: 0; }
-.recurrence-submit { display: flex; justify-content: flex-end; }
-.rule-list { grid-column: 2; border-top: 1px solid #dfe3e0; }
-.rule-list li { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid #e3e6e4; }
-.rule-list li > div { min-width: 0; display: grid; gap: 3px; }
-.rule-list span { color: #6e756f; font-size: 12px; overflow-wrap: anywhere; }
 
 @media (max-width: 760px) {
   .app-shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
@@ -308,7 +300,6 @@ main { min-width: 0; width: 100%; max-width: 1120px; padding: 25px 30px 50px; }
   .project-sidebar-heading > span { display: none; }
   .project-link { width: auto; flex: 0 0 auto; }
   .settings-section { grid-template-columns: minmax(0, 1fr); gap: 14px; }
-  .rule-list { grid-column: 1; }
 }
 
 @media (max-width: 460px) {
@@ -322,7 +313,7 @@ main { min-width: 0; width: 100%; max-width: 1120px; padding: 25px 30px 50px; }
   .row-actions .icon-button { width: 30px; min-width: 30px; }
   .task-row { gap: 7px; }
   .subtask-list { margin-left: 18px; }
-  .editor-form, .recurrence-form { grid-template-columns: minmax(0, 1fr); }
+  .editor-form { grid-template-columns: minmax(0, 1fr); }
   .field-wide { grid-column: 1; }
   .modal { padding: 15px; }
 }
