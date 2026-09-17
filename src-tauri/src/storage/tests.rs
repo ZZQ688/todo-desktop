@@ -82,8 +82,11 @@ fn migration_drops_scheduled_date_column_and_index() {
         .unwrap();
     conn.pragma_update(None, "user_version", 2).unwrap();
     insert_task(&conn, "task", None).unwrap();
-    conn.execute("UPDATE tasks SET scheduled_date='2026-09-16' WHERE id='task'", [])
-        .unwrap();
+    conn.execute(
+        "UPDATE tasks SET scheduled_date='2026-09-16' WHERE id='task'",
+        [],
+    )
+    .unwrap();
 
     initialize(&mut conn).unwrap();
 

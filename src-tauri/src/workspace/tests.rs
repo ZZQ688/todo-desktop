@@ -45,12 +45,7 @@ fn task(
     }
 }
 
-fn task_with_subtasks(
-    id: &str,
-    title: &str,
-    subtasks: &[&str],
-    schedule_today: bool,
-) -> Mutation {
+fn task_with_subtasks(id: &str, title: &str, subtasks: &[&str], schedule_today: bool) -> Mutation {
     Mutation::SaveTask {
         task: TaskDraft {
             id: id.into(),
@@ -82,7 +77,12 @@ fn task_status(workspace: &Workspace, id: &str) -> TaskStatus {
         .clone()
 }
 
-fn materialize_batch(source: &str, expected: Option<&str>, through: &str, dates: &[&str]) -> Mutation {
+fn materialize_batch(
+    source: &str,
+    expected: Option<&str>,
+    through: &str,
+    dates: &[&str],
+) -> Mutation {
     Mutation::Materialize {
         batches: vec![OccurrenceBatch {
             source_task_id: source.into(),
@@ -177,8 +177,12 @@ fn crud_persists_and_subtasks_follow_parent_group() {
 fn adding_a_child_in_the_today_context_lands_it_in_today() {
     let mut connection = memory_database();
     let today = "2026-09-18";
-    mutate_workspace(&mut connection, task("parent", "Parent", None, None, None, true), today)
-        .unwrap();
+    mutate_workspace(
+        &mut connection,
+        task("parent", "Parent", None, None, None, true),
+        today,
+    )
+    .unwrap();
     mutate_workspace(
         &mut connection,
         task("child", "Child", None, Some("parent"), None, true),
@@ -390,7 +394,14 @@ fn completing_an_instance_does_not_touch_its_source_or_real_children() {
     .unwrap();
     mutate_workspace(
         &mut connection,
-        task("series", "Series", None, None, Some(repeat("daily", 1)), false),
+        task(
+            "series",
+            "Series",
+            None,
+            None,
+            Some(repeat("daily", 1)),
+            false,
+        ),
         "2026-09-17",
     )
     .unwrap();
@@ -502,7 +513,14 @@ fn materialize_advances_cursor_and_rejects_stale_batches() {
     let mut connection = memory_database();
     mutate_workspace(
         &mut connection,
-        task("series", "Series", None, None, Some(repeat("daily", 1)), false),
+        task(
+            "series",
+            "Series",
+            None,
+            None,
+            Some(repeat("daily", 1)),
+            false,
+        ),
         "2026-09-17",
     )
     .unwrap();
@@ -521,8 +539,7 @@ fn materialize_advances_cursor_and_rejects_stale_batches() {
     assert!(loaded
         .tasks
         .iter()
-        .all(|t| t.recurrence_source_id.as_deref() == Some("series")
-            || t.id == "series"));
+        .all(|t| t.recurrence_source_id.as_deref() == Some("series") || t.id == "series"));
 
     // Replaying the same batch with a stale cursor is rejected.
     assert!(mutate_workspace(
@@ -551,7 +568,14 @@ fn materialize_supplements_across_days() {
     let mut connection = memory_database();
     mutate_workspace(
         &mut connection,
-        task("series", "Series", None, None, Some(repeat("daily", 1)), false),
+        task(
+            "series",
+            "Series",
+            None,
+            None,
+            Some(repeat("daily", 1)),
+            false,
+        ),
         "2026-09-17",
     )
     .unwrap();
@@ -601,7 +625,10 @@ fn batch_mutations_reject_unknown_ids_atomically() {
         "2026-09-17"
     )
     .is_err());
-    assert_eq!(task_status(&load_workspace(&connection).unwrap(), "task"), TaskStatus::Open);
+    assert_eq!(
+        task_status(&load_workspace(&connection).unwrap(), "task"),
+        TaskStatus::Open
+    );
 
     assert!(mutate_workspace(
         &mut connection,
@@ -636,7 +663,14 @@ fn materialize_skips_tombstoned_dates() {
     let mut connection = memory_database();
     mutate_workspace(
         &mut connection,
-        task("series", "Series", None, None, Some(repeat("daily", 1)), false),
+        task(
+            "series",
+            "Series",
+            None,
+            None,
+            Some(repeat("daily", 1)),
+            false,
+        ),
         "2026-09-17",
     )
     .unwrap();
@@ -650,12 +684,7 @@ fn materialize_skips_tombstoned_dates() {
 
     let loaded = mutate_workspace(
         &mut connection,
-        materialize_batch(
-            "series",
-            None,
-            "2026-09-18",
-            &["2026-09-17", "2026-09-18"],
-        ),
+        materialize_batch("series", None, "2026-09-18", &["2026-09-17", "2026-09-18"]),
         "2026-09-17",
     )
     .unwrap();
@@ -676,18 +705,20 @@ fn deleting_an_instance_leaves_a_tombstone_and_stays_deleted() {
     let mut connection = memory_database();
     mutate_workspace(
         &mut connection,
-        task("series", "Series", None, None, Some(repeat("daily", 1)), false),
+        task(
+            "series",
+            "Series",
+            None,
+            None,
+            Some(repeat("daily", 1)),
+            false,
+        ),
         "2026-09-17",
     )
     .unwrap();
     mutate_workspace(
         &mut connection,
-        materialize_batch(
-            "series",
-            None,
-            "2026-09-18",
-            &["2026-09-17", "2026-09-18"],
-        ),
+        materialize_batch("series", None, "2026-09-18", &["2026-09-17", "2026-09-18"]),
         "2026-09-17",
     )
     .unwrap();
@@ -742,18 +773,20 @@ fn deleting_a_source_task_deletes_its_instances() {
     let mut connection = memory_database();
     mutate_workspace(
         &mut connection,
-        task("series", "Series", None, None, Some(repeat("daily", 1)), false),
+        task(
+            "series",
+            "Series",
+            None,
+            None,
+            Some(repeat("daily", 1)),
+            false,
+        ),
         "2026-09-17",
     )
     .unwrap();
     mutate_workspace(
         &mut connection,
-        materialize_batch(
-            "series",
-            None,
-            "2026-09-18",
-            &["2026-09-17", "2026-09-18"],
-        ),
+        materialize_batch("series", None, "2026-09-18", &["2026-09-17", "2026-09-18"]),
         "2026-09-17",
     )
     .unwrap();
@@ -768,7 +801,9 @@ fn deleting_a_source_task_deletes_its_instances() {
     .unwrap();
     assert!(loaded.tasks.is_empty());
     let occ_count: i64 = connection
-        .query_row("SELECT count(*) FROM recurrence_occurrences", [], |r| r.get(0))
+        .query_row("SELECT count(*) FROM recurrence_occurrences", [], |r| {
+            r.get(0)
+        })
         .unwrap();
     assert_eq!(occ_count, 0);
 }
@@ -785,12 +820,9 @@ fn carryover_moves_open_tasks_forward_without_changing_created_on() {
     let loaded = mutate_workspace(&mut connection, Mutation::Carryover, "2026-09-17").unwrap();
     let task = loaded.tasks.iter().find(|t| t.id == "task").unwrap();
     assert_eq!(task.created_on, "2026-09-15");
-    assert!(loaded
-        .entries
-        .iter()
-        .any(|e| e.task_id == "task"
-            && e.local_date == "2026-09-17"
-            && e.carried_from_date.as_deref() == Some("2026-09-15")));
+    assert!(loaded.entries.iter().any(|e| e.task_id == "task"
+        && e.local_date == "2026-09-17"
+        && e.carried_from_date.as_deref() == Some("2026-09-15")));
 }
 
 #[test]
@@ -798,7 +830,14 @@ fn carryover_skips_recurring_source_tasks() {
     let mut connection = memory_database();
     mutate_workspace(
         &mut connection,
-        task("series", "Series", None, None, Some(repeat("daily", 1)), false),
+        task(
+            "series",
+            "Series",
+            None,
+            None,
+            Some(repeat("daily", 1)),
+            false,
+        ),
         "2026-09-17",
     )
     .unwrap();
@@ -816,7 +855,11 @@ fn carryover_skips_recurring_source_tasks() {
         .iter()
         .any(|e| e.task_id == "series" && e.local_date == "2026-09-17"));
     assert_eq!(
-        loaded.entries.iter().filter(|e| e.task_id == "series").count(),
+        loaded
+            .entries
+            .iter()
+            .filter(|e| e.task_id == "series")
+            .count(),
         1
     );
 }
@@ -909,7 +952,10 @@ fn load_workspace_returns_source_tasks_after_migration() {
         .iter()
         .find(|t| t.id == "occurrence:rule:2026-09-03")
         .unwrap();
-    assert_eq!(instance.recurrence_source_id.as_deref(), Some("series:rule"));
+    assert_eq!(
+        instance.recurrence_source_id.as_deref(),
+        Some("series:rule")
+    );
     assert_eq!(loaded.entries.len(), 1);
 }
 
@@ -942,7 +988,11 @@ fn migration_disarms_finished_legacy_series_but_keeps_active_ones() {
     let loaded = load_workspace(&connection).unwrap();
     let finished = loaded.tasks.iter().find(|t| t.id == "series:done").unwrap();
     assert_eq!(finished.repeat, None);
-    let active = loaded.tasks.iter().find(|t| t.id == "series:active").unwrap();
+    let active = loaded
+        .tasks
+        .iter()
+        .find(|t| t.id == "series:active")
+        .unwrap();
     assert_eq!(active.repeat.as_ref().unwrap().freq, "daily");
     assert_eq!(active.repeat.as_ref().unwrap().interval, 1);
 }
@@ -1074,13 +1124,27 @@ fn validation_and_failed_mutations_are_atomic() {
     // Bad repeat interval is rejected.
     assert!(mutate_workspace(
         &mut connection,
-        task("bad-repeat", "Repeat", None, None, Some(repeat("daily", 0)), false),
+        task(
+            "bad-repeat",
+            "Repeat",
+            None,
+            None,
+            Some(repeat("daily", 0)),
+            false
+        ),
         "2026-09-17"
     )
     .is_err());
     assert!(mutate_workspace(
         &mut connection,
-        task("bad-freq", "Repeat", None, None, Some(repeat("yearly", 1)), false),
+        task(
+            "bad-freq",
+            "Repeat",
+            None,
+            None,
+            Some(repeat("yearly", 1)),
+            false
+        ),
         "2026-09-17"
     )
     .is_err());

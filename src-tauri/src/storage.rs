@@ -63,7 +63,9 @@ fn validate_schema(connection: &Connection) -> Result<(), StorageError> {
     connection.prepare(
         "SELECT id,title,status,priority,repeat,created_on,recurrence_source_id,recurrence_generated_through FROM tasks LIMIT 0",
     )?;
-    connection.prepare("SELECT source_task_id,occurrence_date,task_id FROM recurrence_occurrences LIMIT 0")?;
+    connection.prepare(
+        "SELECT source_task_id,occurrence_date,task_id FROM recurrence_occurrences LIMIT 0",
+    )?;
     connection.prepare("SELECT schema_version,locale,density FROM settings WHERE id=1")?;
     Ok(())
 }

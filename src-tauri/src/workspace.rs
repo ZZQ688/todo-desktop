@@ -141,7 +141,11 @@ pub struct OccurrenceBatch {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum Mutation {
     SaveTask {
         task: TaskDraft,
@@ -334,9 +338,7 @@ fn save_task(
             ));
         }
         if !subtasks.is_empty() {
-            return Err(WorkspaceError::InvalidInput(
-                "子任务不能再有子任务".into(),
-            ));
+            return Err(WorkspaceError::InvalidInput("子任务不能再有子任务".into()));
         }
         let parent: Option<(Option<String>, Option<String>)> = tx
             .query_row(
@@ -433,7 +435,10 @@ fn delete_children_except(
         let sql = format!("DELETE FROM tasks WHERE parent_id=?1 AND id NOT IN ({placeholders})");
         let mut args: Vec<String> = vec![parent_id.to_string()];
         args.extend(keep.iter().cloned());
-        tx.execute(&sql, rusqlite::params_from_iter(args.iter().map(|s| s.as_str())))?;
+        tx.execute(
+            &sql,
+            rusqlite::params_from_iter(args.iter().map(|s| s.as_str())),
+        )?;
     }
     Ok(())
 }
@@ -501,7 +506,9 @@ fn set_completion(
 fn delete_tasks(tx: &Transaction<'_>, ids: Vec<String>) -> Result<(), WorkspaceError> {
     for id in &ids {
         let repeat: Option<Option<String>> = tx
-            .query_row("SELECT repeat FROM tasks WHERE id=?1", [id], |row| row.get(0))
+            .query_row("SELECT repeat FROM tasks WHERE id=?1", [id], |row| {
+                row.get(0)
+            })
             .optional()?;
         let Some(repeat) = repeat else {
             return Err(WorkspaceError::MissingTask(id.clone()));
@@ -510,7 +517,10 @@ fn delete_tasks(tx: &Transaction<'_>, ids: Vec<String>) -> Result<(), WorkspaceE
             // Recurring source task: remove generated instances, then the series
             // occurrences, then the source itself.
             tx.execute("DELETE FROM tasks WHERE recurrence_source_id=?1", [id])?;
-            tx.execute("DELETE FROM recurrence_occurrences WHERE source_task_id=?1", [id])?;
+            tx.execute(
+                "DELETE FROM recurrence_occurrences WHERE source_task_id=?1",
+                [id],
+            )?;
             tx.execute("DELETE FROM tasks WHERE id=?1", [id])?;
         } else {
             // Plain task or a generated instance. Children cascade via
@@ -553,7 +563,9 @@ fn move_to_group(
     let timestamp = now(tx)?;
     for id in &ids {
         let parent_id: Option<String> = tx
-            .query_row("SELECT parent_id FROM tasks WHERE id=?1", [id], |row| row.get(0))
+            .query_row("SELECT parent_id FROM tasks WHERE id=?1", [id], |row| {
+                row.get(0)
+            })
             .optional()?
             .ok_or_else(|| WorkspaceError::MissingTask(id.clone()))?;
         if parent_id.is_none() {
@@ -581,10 +593,27 @@ fn save_project(tx: &Transaction<'_>, id: &str, name: &str) -> Result<(), Worksp
     Ok(())
 }
 
-fn materialize(
-    tx: &Transaction<'_>,
-    batches: Vec<OccurrenceBatch>,
-) -> Result<(), WorkspaceError> {
+// (repeat, title, project_id, priority, due_date, recurrence_generated_through)
+type MaterializeSourceRow = (
+    Option<String>,
+    String,
+    Option<String>,
+    String,
+    Option<String>,
+    Option<String>,
+);
+
+// (id, template_json, rrule, start_date, end_date, generated_through)
+type LegacyRuleRow = (
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+);
+
+fn materialize(tx: &Transaction<'_>, batches: Vec<OccurrenceBatch>) -> Result<(), WorkspaceError> {
     let mut sources = HashSet::new();
     for batch in batches {
         if !sources.insert(batch.source_task_id.clone()) {
@@ -592,7 +621,7 @@ fn materialize(
                 "同一源任务不能出现在多个生成批次中".into(),
             ));
         }
-        let row: Option<(Option<String>, String, Option<String>, String, Option<String>, Option<String>)> = tx
+        let row: Option<MaterializeSourceRow> = tx
             .query_row(
                 "SELECT repeat,title,project_id,priority,due_date,recurrence_generated_through FROM tasks WHERE id=?1",
                 [&batch.source_task_id],
@@ -807,12 +836,14 @@ fn parse_density(value: &str) -> Density {
 
 /// Parses a legacy rrule string into a `RepeatRule`. Handles the exact strings
 /// the old frontend `toRrule` emitted:
+///
 ///   - `FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR` → weekdays (interval 1)
 ///   - `FREQ=DAILY;INTERVAL=n`            → daily, interval n
 ///   - `FREQ=WEEKLY;INTERVAL=n`           → weekly, interval n
 ///   - `FREQ=MONTHLY;INTERVAL=n`          → monthly, interval n
-/// Interval defaults to 1 when `INTERVAL=` is absent; parsing is
-/// case-insensitive; unknown frequencies are an `InvalidInput` error.
+///
+/// Interval defaults to 1 when `INTERVAL=` is absent; parsing is case-insensitive;
+/// unknown frequencies are an `InvalidInput` error.
 fn repeat_from_rrule(rrule: &str) -> Result<RepeatRule, WorkspaceError> {
     let upper = rrule.to_ascii_uppercase();
     if upper.contains("BYDAY=MO,TU,WE,TH,FR") {
@@ -856,7 +887,7 @@ fn parse_interval(upper: &str) -> Option<i64> {
 /// migration transaction, after `003_redesign.sql` has added the new columns
 /// and created `recurrence_occurrences_v2`.
 pub fn migrate_recurrence_rules(tx: &Transaction<'_>) -> Result<(), WorkspaceError> {
-    let rows: Vec<(String, String, String, String, Option<String>, Option<String>)> = {
+    let rows: Vec<LegacyRuleRow> = {
         let mut stmt = tx.prepare(
             "SELECT id,template_json,rrule,start_date,end_date,generated_through FROM recurrence_rules",
         )?;
