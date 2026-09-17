@@ -64,36 +64,36 @@ export function TaskEditor({ workspace, task, parentId = null, initialProjectId 
       <InlineMutationError show={failed} error={error} />
       <form onSubmit={submit}>
         <fieldset className="form-fieldset editor-form" disabled={busy}>
-        <label className="field field-wide">任务名称
-          <input ref={titleRef} value={title} onChange={(event) => setTitle(event.target.value)}
-            required maxLength={200} autoComplete="off" />
-        </label>
-        <label className="field">优先级
-          <select aria-label="优先级" value={priority} onChange={(event) => setPriority(event.target.value as Priority)}>
-            <option value="high">高</option><option value="normal">普通</option><option value="low">低</option>
-          </select>
-        </label>
-        <label className="field">项目
-          <select aria-label="项目" value={projectId} disabled={Boolean(task?.parentId ?? parentId)}
-            onChange={(event) => setProjectId(event.target.value)}>
-            <option value="">无项目</option>
-            {workspace.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-          </select>
-        </label>
-        <label className="field">截止日期
-          <input aria-label="截止日期" type="date" min="0001-01-01" max="9999-12-31" value={dueDate}
-            onChange={(event) => setDueDate(event.target.value)} />
-        </label>
-        <label className="field">安排日期
-          <input aria-label="安排日期" type="date" min="0001-01-01" max="9999-12-31" value={scheduledDate}
-            onChange={(event) => setScheduledDate(event.target.value)} />
-        </label>
-        <div className="form-actions field-wide">
-          <button type="button" onClick={onClose}>取消</button>
-          <button className="primary-button" type="submit" disabled={!title.trim()}>
-            {busy ? "保存中" : "保存"}
-          </button>
-        </div>
+          <label className="field field-wide">任务名称
+            <input ref={titleRef} value={title} onChange={(event) => setTitle(event.target.value)}
+              required maxLength={200} autoComplete="off" />
+          </label>
+          <label className="field">优先级
+            <select aria-label="优先级" value={priority} onChange={(event) => setPriority(event.target.value as Priority)}>
+              <option value="high">高</option><option value="normal">普通</option><option value="low">低</option>
+            </select>
+          </label>
+          <label className="field">项目
+            <select aria-label="项目" value={projectId} disabled={Boolean(task?.parentId ?? parentId)}
+              onChange={(event) => setProjectId(event.target.value)}>
+              <option value="">无项目</option>
+              {workspace.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+            </select>
+          </label>
+          <label className="field">截止日期
+            <input aria-label="截止日期" type="date" min="0001-01-01" max="9999-12-31" value={dueDate}
+              onChange={(event) => setDueDate(event.target.value)} />
+          </label>
+          <label className="field">安排日期
+            <input aria-label="安排日期" type="date" min="0001-01-01" max="9999-12-31" value={scheduledDate}
+              onChange={(event) => setScheduledDate(event.target.value)} />
+          </label>
+          <div className="form-actions field-wide">
+            <button type="button" onClick={onClose}>取消</button>
+            <button className="primary-button" type="submit" disabled={!title.trim()}>
+              {busy ? "保存中" : "保存"}
+            </button>
+          </div>
         </fieldset>
       </form>
     </div>

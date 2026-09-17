@@ -39,10 +39,10 @@ function ProjectDialog({ project, busy, error, run, onClose }: {
     <InlineMutationError show={failed} error={error} />
     <form onSubmit={submit}>
       <fieldset className="form-fieldset editor-form" disabled={busy}>
-      <label className="field field-wide">项目名称<input ref={inputRef} aria-label="项目名称" value={name}
-        onChange={(event) => setName(event.target.value)} required maxLength={80} /></label>
-      <div className="form-actions field-wide"><button type="button" onClick={onClose}>取消</button>
-        <button className="primary-button" type="submit" disabled={!name.trim()}>保存</button></div>
+        <label className="field field-wide">项目名称<input ref={inputRef} aria-label="项目名称" value={name}
+          onChange={(event) => setName(event.target.value)} required maxLength={80} /></label>
+        <div className="form-actions field-wide"><button type="button" onClick={onClose}>取消</button>
+          <button className="primary-button" type="submit" disabled={!name.trim()}>保存</button></div>
       </fieldset>
     </form>
   </div></div>;

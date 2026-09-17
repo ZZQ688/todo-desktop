@@ -84,11 +84,11 @@ export function DailyView({ workspace, date, today, onDateChange, busy, error, r
     </div>
     <form onSubmit={addQuickTask}>
       <fieldset className="form-fieldset quick-add" disabled={busy}>
-      <label className="sr-only" htmlFor="quick-task">快速添加任务</label>
-      <input id="quick-task" aria-label="快速添加任务" value={quickTitle}
-        onChange={(event) => setQuickTitle(event.target.value)} placeholder="添加今天的任务" maxLength={200} />
-      <button className="primary-button" type="submit" disabled={!quickTitle.trim()}>
-        <Plus aria-hidden="true" />添加任务</button>
+        <label className="sr-only" htmlFor="quick-task">快速添加任务</label>
+        <input id="quick-task" aria-label="快速添加任务" value={quickTitle}
+          onChange={(event) => setQuickTitle(event.target.value)} placeholder="添加今天的任务" maxLength={200} />
+        <button className="primary-button" type="submit" disabled={!quickTitle.trim()}>
+          <Plus aria-hidden="true" />添加任务</button>
       </fieldset>
     </form>
     <div className="filter-toolbar">

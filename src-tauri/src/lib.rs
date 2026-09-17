@@ -8,16 +8,18 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            let directory = app.path().app_data_dir()?;
+            let database_path = directory.join("todo.sqlite");
             let result = (|| -> Result<rusqlite::Connection, Box<dyn std::error::Error>> {
-                let directory = app.path().app_data_dir()?;
                 std::fs::create_dir_all(&directory)?;
-                Ok(storage::open_database(&directory.join("todo.sqlite"))?)
+                Ok(storage::open_database(&database_path)?)
             })();
             if let Err(error) = &result {
                 eprintln!("Database initialization failed: {error}");
             }
             app.manage(commands::DatabaseState {
                 connection: Mutex::new(result.ok()),
+                path: database_path,
             });
             Ok(())
         })

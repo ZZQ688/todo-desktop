@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde::Serialize;
@@ -6,6 +7,7 @@ use crate::workspace::{self, Mutation, Workspace};
 
 pub struct DatabaseState {
     pub connection: Mutex<Option<rusqlite::Connection>>,
+    pub path: PathBuf,
 }
 
 #[derive(Debug, Serialize)]
@@ -47,9 +49,19 @@ fn connection<'a>(
     })
 }
 
+fn reopen(state: &DatabaseState, connection: &mut Option<rusqlite::Connection>) {
+    if connection.is_none() {
+        if let Some(parent) = state.path.parent() {
+            if std::fs::create_dir_all(parent).is_err() { return; }
+        }
+        *connection = crate::storage::open_database(&state.path).ok();
+    }
+}
+
 #[tauri::command]
 pub fn load_workspace(state: tauri::State<'_, DatabaseState>) -> Result<Workspace, CommandError> {
-    let guard = connection(state.inner())?;
+    let mut guard = connection(state.inner())?;
+    reopen(state.inner(), &mut guard);
     let db = guard.as_ref().ok_or_else(|| CommandError {
         code: "database_unavailable".into(),
         message: "本地数据无法打开。".into(),
@@ -64,6 +76,7 @@ pub fn mutate_workspace(
     today: String,
 ) -> Result<Workspace, CommandError> {
     let mut guard = connection(state.inner())?;
+    reopen(state.inner(), &mut guard);
     let db = guard.as_mut().ok_or_else(|| CommandError {
         code: "database_unavailable".into(),
         message: "本地数据无法打开。".into(),

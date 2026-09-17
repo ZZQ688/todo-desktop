@@ -66,37 +66,37 @@ export function SettingsView({ workspace, busy, run, today }: Props) {
       <div><h2 id="recurrence-heading">重复任务</h2><p>按日期生成独立任务，停止规则不会删除已经生成的任务。</p></div>
       <form onSubmit={saveRule}>
         <fieldset className="form-fieldset recurrence-form" disabled={busy}>
-        <label className="field field-wide">任务名称
-          <input value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={200} />
-        </label>
-        <label className="field">重复方式<select aria-label="重复方式" value={frequency}
-          onChange={(event) => setFrequency(event.target.value as Frequency)}>
-          <option value="daily">每天</option><option value="weekdays">工作日</option>
-          <option value="weekly">每周</option><option value="monthly">每月</option>
-        </select></label>
-        <label className="field">间隔
-          <input aria-label="间隔" type="number" min={1} max={365} step={1} value={interval} disabled={frequency === "weekdays"}
-            onChange={(event) => setInterval(Math.max(1, Number(event.target.value) || 1))} />
-        </label>
-        <label className="field">开始日期
-          <input aria-label="开始日期" type="date" min="0001-01-01" max="9999-12-31" value={startDate} required
-            onChange={(event) => {
-              if (event.target.value && event.target.validity.valid) setStartDate(asLocalDate(event.target.value));
-            }} />
-        </label>
-        <label className="field">结束日期（可选）
-          <input aria-label="结束日期（可选）" type="date" min={startDate} max="9999-12-31" value={endDate}
-            onChange={(event) => setEndDate(event.target.value)} />
-        </label>
-        <label className="field">项目<select aria-label="项目" value={projectId} onChange={(event) => setProjectId(event.target.value)}>
-          <option value="">无项目</option>{workspace.projects.map((project) =>
-            <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
-        <label className="field">优先级<select aria-label="优先级" value={priority}
-          onChange={(event) => setPriority(event.target.value as Priority)}>
-          <option value="high">高</option><option value="normal">普通</option><option value="low">低</option>
-        </select></label>
-        <div className="field-wide recurrence-submit"><button className="primary-button" type="submit"
-          disabled={!title.trim()}><CalendarSync aria-hidden="true" />创建重复任务</button></div>
+          <label className="field field-wide">任务名称
+            <input value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={200} />
+          </label>
+          <label className="field">重复方式<select aria-label="重复方式" value={frequency}
+            onChange={(event) => setFrequency(event.target.value as Frequency)}>
+            <option value="daily">每天</option><option value="weekdays">工作日</option>
+            <option value="weekly">每周</option><option value="monthly">每月</option>
+          </select></label>
+          <label className="field">间隔
+            <input aria-label="间隔" type="number" min={1} max={365} step={1} value={interval} disabled={frequency === "weekdays"}
+              onChange={(event) => setInterval(Math.max(1, Number(event.target.value) || 1))} />
+          </label>
+          <label className="field">开始日期
+            <input aria-label="开始日期" type="date" min="0001-01-01" max="9999-12-31" value={startDate} required
+              onChange={(event) => {
+                if (event.target.value && event.target.validity.valid) setStartDate(asLocalDate(event.target.value));
+              }} />
+          </label>
+          <label className="field">结束日期（可选）
+            <input aria-label="结束日期（可选）" type="date" min={startDate} max="9999-12-31" value={endDate}
+              onChange={(event) => setEndDate(event.target.value)} />
+          </label>
+          <label className="field">项目<select aria-label="项目" value={projectId} onChange={(event) => setProjectId(event.target.value)}>
+            <option value="">无项目</option>{workspace.projects.map((project) =>
+              <option key={project.id} value={project.id}>{project.name}</option>)}</select></label>
+          <label className="field">优先级<select aria-label="优先级" value={priority}
+            onChange={(event) => setPriority(event.target.value as Priority)}>
+            <option value="high">高</option><option value="normal">普通</option><option value="low">低</option>
+          </select></label>
+          <div className="field-wide recurrence-submit"><button className="primary-button" type="submit"
+            disabled={!title.trim()}><CalendarSync aria-hidden="true" />创建重复任务</button></div>
         </fieldset>
       </form>
       {workspace.rules.length === 0 ? <p className="empty-state compact-empty">还没有重复任务</p> :
