@@ -8,12 +8,27 @@ fn memory_database() -> Connection {
     connection
 }
 
+fn project(id: &str, name: &str) -> Mutation {
+    Mutation::SaveProject {
+        id: id.into(),
+        name: name.into(),
+    }
+}
+
+fn repeat(freq: &str, interval: i64) -> RepeatRule {
+    RepeatRule {
+        freq: freq.into(),
+        interval,
+    }
+}
+
 fn task(
     id: &str,
     title: &str,
     project_id: Option<&str>,
     parent_id: Option<&str>,
-    scheduled_date: Option<&str>,
+    repeat: Option<RepeatRule>,
+    schedule_today: bool,
 ) -> Mutation {
     Mutation::SaveTask {
         task: TaskDraft {
@@ -23,36 +38,63 @@ fn task(
             parent_id: parent_id.map(str::to_owned),
             priority: Priority::Normal,
             due_date: None,
-            scheduled_date: scheduled_date.map(str::to_owned),
+            repeat,
         },
+        subtasks: vec![],
+        schedule_today,
     }
 }
 
-fn project(id: &str, name: &str) -> Mutation {
-    Mutation::SaveProject {
-        id: id.into(),
-        name: name.into(),
-    }
-}
-
-fn rule(id: &str, project_id: Option<&str>, title: &str) -> RecurrenceRule {
-    RecurrenceRule {
-        id: id.into(),
-        template: TaskTemplate {
-            project_id: project_id.map(str::to_owned),
+fn task_with_subtasks(
+    id: &str,
+    title: &str,
+    subtasks: &[&str],
+    schedule_today: bool,
+) -> Mutation {
+    Mutation::SaveTask {
+        task: TaskDraft {
+            id: id.into(),
             title: title.into(),
-            priority: Priority::High,
+            project_id: None,
+            parent_id: None,
+            priority: Priority::Normal,
             due_date: None,
+            repeat: None,
         },
-        rrule: "FREQ=DAILY".into(),
-        start_date: "2026-09-01".into(),
-        end_date: None,
-        time_zone: "Asia/Shanghai".into(),
+        subtasks: subtasks
+            .iter()
+            .map(|sub| SubtaskDraft {
+                id: sub.to_string(),
+                title: sub.to_string(),
+            })
+            .collect(),
+        schedule_today,
+    }
+}
+
+fn task_status(workspace: &Workspace, id: &str) -> TaskStatus {
+    workspace
+        .tasks
+        .iter()
+        .find(|t| t.id == id)
+        .unwrap()
+        .status
+        .clone()
+}
+
+fn materialize_batch(source: &str, expected: Option<&str>, through: &str, dates: &[&str]) -> Mutation {
+    Mutation::Materialize {
+        batches: vec![OccurrenceBatch {
+            source_task_id: source.into(),
+            expected_through: expected.map(str::to_owned),
+            through: through.into(),
+            dates: dates.iter().map(|d| d.to_string()).collect(),
+        }],
     }
 }
 
 #[test]
-fn crud_persists_and_parent_project_changes_follow_to_child() {
+fn crud_persists_and_subtasks_follow_parent_group() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("workspace.sqlite");
     {
@@ -61,38 +103,56 @@ fn crud_persists_and_parent_project_changes_follow_to_child() {
         mutate_workspace(&mut connection, project("home", "Home"), "2026-09-17").unwrap();
         mutate_workspace(
             &mut connection,
-            task("parent", "Parent", Some("work"), None, Some("2026-09-17")),
+            Mutation::SaveTask {
+                task: TaskDraft {
+                    id: "parent".into(),
+                    title: "Parent".into(),
+                    project_id: Some("work".into()),
+                    parent_id: None,
+                    priority: Priority::Normal,
+                    due_date: None,
+                    repeat: None,
+                },
+                subtasks: vec![SubtaskDraft {
+                    id: "child".into(),
+                    title: "Child".into(),
+                }],
+                schedule_today: true,
+            },
             "2026-09-17",
         )
         .unwrap();
         mutate_workspace(
             &mut connection,
-            task(
-                "child",
-                "Child",
-                Some("home"),
-                Some("parent"),
-                Some("2026-09-17"),
-            ),
-            "2026-09-17",
-        )
-        .unwrap();
-        mutate_workspace(
-            &mut connection,
-            task(
-                "parent",
-                "Parent edited",
-                Some("home"),
-                None,
-                Some("2026-09-17"),
-            ),
+            Mutation::SaveTask {
+                task: TaskDraft {
+                    id: "parent".into(),
+                    title: "Parent edited".into(),
+                    project_id: Some("home".into()),
+                    parent_id: None,
+                    priority: Priority::Normal,
+                    due_date: None,
+                    repeat: None,
+                },
+                subtasks: vec![
+                    SubtaskDraft {
+                        id: "child".into(),
+                        title: "Child".into(),
+                    },
+                    SubtaskDraft {
+                        id: "child2".into(),
+                        title: "Child 2".into(),
+                    },
+                ],
+                schedule_today: true,
+            },
             "2026-09-17",
         )
         .unwrap();
         mutate_workspace(
             &mut connection,
             Mutation::SetCompletion {
-                id: "parent".into(),
+                ids: vec!["parent".into()],
                 completed: true,
             },
             "2026-09-17",
@@ -102,34 +162,61 @@ fn crud_persists_and_parent_project_changes_follow_to_child() {
 
     let connection = storage::open_database(&path).unwrap();
     let loaded = load_workspace(&connection).unwrap();
-    let parent = loaded
-        .tasks
-        .iter()
-        .find(|item| item.id == "parent")
-        .unwrap();
-    let child = loaded.tasks.iter().find(|item| item.id == "child").unwrap();
+    let parent = loaded.tasks.iter().find(|t| t.id == "parent").unwrap();
+    let child = loaded.tasks.iter().find(|t| t.id == "child").unwrap();
+    let child2 = loaded.tasks.iter().find(|t| t.id == "child2").unwrap();
     assert_eq!(parent.title, "Parent edited");
     assert_eq!(parent.status, TaskStatus::Completed);
     assert_eq!(child.project_id.as_deref(), Some("home"));
-    assert_eq!(child.status, TaskStatus::Open);
-    assert_eq!(loaded.entries.len(), 2);
+    assert_eq!(child.status, TaskStatus::Completed);
+    assert_eq!(child2.project_id.as_deref(), Some("home"));
+    assert_eq!(loaded.entries.len(), 3);
 }
 
 #[test]
-fn project_delete_preserves_tasks_and_clears_rule_templates() {
+fn save_task_reconciles_subtasks_replacing_removed_ones() {
+    let mut connection = memory_database();
+    mutate_workspace(
+        &mut connection,
+        task_with_subtasks("parent", "Parent", &["a", "b"], true),
+        "2026-09-17",
+    )
+    .unwrap();
+    let ids: Vec<String> = load_workspace(&connection)
+        .unwrap()
+        .tasks
+        .iter()
+        .map(|t| t.id.clone())
+        .collect();
+    assert!(ids.contains(&"parent".into()));
+    assert!(ids.contains(&"a".into()));
+    assert!(ids.contains(&"b".into()));
+
+    mutate_workspace(
+        &mut connection,
+        task_with_subtasks("parent", "Parent", &["a", "c"], true),
+        "2026-09-17",
+    )
+    .unwrap();
+    let ids: Vec<String> = load_workspace(&connection)
+        .unwrap()
+        .tasks
+        .iter()
+        .map(|t| t.id.clone())
+        .collect();
+    assert!(ids.contains(&"parent".into()));
+    assert!(ids.contains(&"a".into()));
+    assert!(!ids.contains(&"b".into()));
+    assert!(ids.contains(&"c".into()));
+}
+
+#[test]
+fn project_delete_preserves_tasks_and_clears_their_group() {
     let mut connection = memory_database();
     mutate_workspace(&mut connection, project("work", "Work"), "2026-09-17").unwrap();
     mutate_workspace(
         &mut connection,
-        task("task", "Task", Some("work"), None, None),
-        "2026-09-17",
-    )
-    .unwrap();
-    mutate_workspace(
-        &mut connection,
-        Mutation::SaveRule {
-            rule: rule("rule", Some("work"), "Repeat"),
-        },
+        task("task", "Task", Some("work"), None, None, true),
         "2026-09-17",
     )
     .unwrap();
@@ -142,409 +229,638 @@ fn project_delete_preserves_tasks_and_clears_rule_templates() {
     .unwrap();
     assert!(loaded.projects.is_empty());
     assert_eq!(loaded.tasks[0].project_id, None);
-    assert_eq!(loaded.rules[0].template.project_id, None);
+    assert_eq!(loaded.tasks.len(), 1);
 }
 
 #[test]
-fn scheduling_keeps_history_and_null_only_removes_today_and_future() {
+fn completing_parent_completes_all_children() {
     let mut connection = memory_database();
     mutate_workspace(
         &mut connection,
-        task("task", "Task", None, None, Some("2026-09-15")),
-        "2026-09-15",
-    )
-    .unwrap();
-    mutate_workspace(&mut connection, Mutation::Carryover, "2026-09-16").unwrap();
-    mutate_workspace(
-        &mut connection,
-        task("task", "Edited", None, None, Some("2026-09-15")),
+        task_with_subtasks("parent", "Parent", &["a", "b"], true),
         "2026-09-17",
-    )
-    .unwrap();
-    mutate_workspace(
-        &mut connection,
-        task("task", "Deferred", None, None, Some("2026-09-20")),
-        "2026-09-17",
-    )
-    .unwrap();
-    let loaded = mutate_workspace(
-        &mut connection,
-        task("task", "Unscheduled", None, None, None),
-        "2026-09-18",
-    )
-    .unwrap();
-
-    let dates: Vec<_> = loaded
-        .entries
-        .iter()
-        .map(|entry| entry.local_date.as_str())
-        .collect();
-    assert_eq!(dates, vec!["2026-09-15", "2026-09-16"]);
-}
-
-#[test]
-fn carryover_handles_missed_days_deferral_and_completed_parent_with_open_child() {
-    let mut connection = memory_database();
-    mutate_workspace(
-        &mut connection,
-        task("old", "Old", None, None, Some("2026-09-10")),
-        "2026-09-10",
-    )
-    .unwrap();
-    mutate_workspace(
-        &mut connection,
-        task("deferred", "Deferred", None, None, Some("2026-09-20")),
-        "2026-09-10",
-    )
-    .unwrap();
-    mutate_workspace(
-        &mut connection,
-        task("parent", "Parent", None, None, Some("2026-09-11")),
-        "2026-09-11",
-    )
-    .unwrap();
-    mutate_workspace(
-        &mut connection,
-        task("child", "Child", None, Some("parent"), Some("2026-09-11")),
-        "2026-09-11",
     )
     .unwrap();
     mutate_workspace(
         &mut connection,
         Mutation::SetCompletion {
-            id: "parent".into(),
+            ids: vec!["parent".into()],
             completed: true,
         },
-        "2026-09-12",
-    )
-    .unwrap();
-
-    let loaded = mutate_workspace(&mut connection, Mutation::Carryover, "2026-09-17").unwrap();
-    let today: Vec<_> = loaded
-        .entries
-        .iter()
-        .filter(|entry| entry.local_date == "2026-09-17")
-        .collect();
-    assert_eq!(today.len(), 2);
-    assert!(today
-        .iter()
-        .any(|entry| entry.task_id == "old"
-            && entry.carried_from_date.as_deref() == Some("2026-09-10")));
-    assert!(today.iter().any(|entry| entry.task_id == "child"
-        && entry.carried_from_date.as_deref() == Some("2026-09-11")));
-    assert!(!today
-        .iter()
-        .any(|entry| entry.task_id == "deferred" || entry.task_id == "parent"));
-}
-
-#[test]
-fn a_new_unscheduled_child_inherits_the_parent_schedule() {
-    let mut connection = memory_database();
-    mutate_workspace(
-        &mut connection,
-        task("parent", "Parent", None, None, Some("2026-09-12")),
-        "2026-09-12",
-    )
-    .unwrap();
-    let loaded = mutate_workspace(
-        &mut connection,
-        task("child", "Child", None, Some("parent"), None),
         "2026-09-17",
     )
     .unwrap();
-    assert!(loaded
-        .entries
-        .iter()
-        .any(|entry| entry.task_id == "child" && entry.local_date == "2026-09-12"));
+    let loaded = load_workspace(&connection).unwrap();
+    assert_eq!(task_status(&loaded, "parent"), TaskStatus::Completed);
+    assert_eq!(task_status(&loaded, "a"), TaskStatus::Completed);
+    assert_eq!(task_status(&loaded, "b"), TaskStatus::Completed);
+}
+
+#[test]
+fn completing_last_child_completes_parent() {
+    let mut connection = memory_database();
+    mutate_workspace(
+        &mut connection,
+        task_with_subtasks("parent", "Parent", &["a", "b"], true),
+        "2026-09-17",
+    )
+    .unwrap();
+    mutate_workspace(
+        &mut connection,
+        Mutation::SetCompletion {
+            ids: vec!["a".into()],
+            completed: true,
+        },
+        "2026-09-17",
+    )
+    .unwrap();
+    let loaded = load_workspace(&connection).unwrap();
+    assert_eq!(task_status(&loaded, "a"), TaskStatus::Completed);
+    assert_eq!(task_status(&loaded, "parent"), TaskStatus::Open);
 
     mutate_workspace(
         &mut connection,
         Mutation::SetCompletion {
-            id: "parent".into(),
+            ids: vec!["b".into()],
             completed: true,
         },
         "2026-09-17",
     )
     .unwrap();
-    let loaded = mutate_workspace(&mut connection, Mutation::Carryover, "2026-09-18").unwrap();
-    assert!(loaded
-        .entries
-        .iter()
-        .any(|entry| entry.task_id == "child" && entry.local_date == "2026-09-18"));
+    let loaded = load_workspace(&connection).unwrap();
+    assert_eq!(task_status(&loaded, "parent"), TaskStatus::Completed);
 }
 
 #[test]
-fn validation_and_failed_mutations_are_atomic() {
+fn uncompleting_parent_opens_all_children() {
     let mut connection = memory_database();
     mutate_workspace(
         &mut connection,
-        task("parent", "Parent", None, None, None),
+        task_with_subtasks("parent", "Parent", &["a", "b"], true),
         "2026-09-17",
     )
     .unwrap();
     mutate_workspace(
         &mut connection,
-        task("child", "Child", None, Some("parent"), None),
-        "2026-09-17",
-    )
-    .unwrap();
-
-    assert!(mutate_workspace(
-        &mut connection,
-        task("deep", "Deep", None, Some("child"), None),
-        "2026-09-17"
-    )
-    .is_err());
-    assert!(mutate_workspace(
-        &mut connection,
-        task("bad-date", "Date", None, None, Some("2026-02-30")),
-        "2026-09-17"
-    )
-    .is_err());
-    assert!(mutate_workspace(&mut connection, Mutation::Carryover, "0000-01-01").is_err());
-    assert!(mutate_workspace(
-        &mut connection,
-        task("bad-parent", "Task", None, Some("missing"), None),
-        "2026-09-17"
-    )
-    .is_err());
-    assert!(mutate_workspace(&mut connection, project("blank", "   "), "2026-09-17").is_err());
-    assert_eq!(load_workspace(&connection).unwrap().tasks.len(), 2);
-}
-
-#[test]
-fn clearing_a_schedule_prevents_later_carryover_without_deleting_history() {
-    let mut connection = memory_database();
-    mutate_workspace(
-        &mut connection,
-        task("task", "Task", None, None, Some("2026-09-15")),
-        "2026-09-15",
-    )
-    .unwrap();
-    let cleared = mutate_workspace(
-        &mut connection,
-        task("task", "Task", None, None, None),
-        "2026-09-17",
-    )
-    .unwrap();
-    assert_eq!(cleared.tasks[0].scheduled_date, None);
-    assert!(cleared
-        .entries
-        .iter()
-        .any(|entry| entry.local_date == "2026-09-15"));
-
-    let carried = mutate_workspace(&mut connection, Mutation::Carryover, "2026-09-18").unwrap();
-    assert_eq!(carried.tasks[0].scheduled_date, None);
-    assert!(!carried
-        .entries
-        .iter()
-        .any(|entry| entry.local_date == "2026-09-18"));
-}
-
-#[test]
-fn materialization_uses_current_template_and_advances_empty_batches() {
-    let mut connection = memory_database();
-    mutate_workspace(
-        &mut connection,
-        Mutation::SaveRule {
-            rule: rule("daily", None, "Original"),
+        Mutation::SetCompletion {
+            ids: vec!["parent".into()],
+            completed: true,
         },
         "2026-09-17",
     )
     .unwrap();
     mutate_workspace(
         &mut connection,
-        Mutation::SaveRule {
-            rule: rule("daily", None, "Current"),
+        Mutation::SetCompletion {
+            ids: vec!["parent".into()],
+            completed: false,
         },
         "2026-09-17",
     )
     .unwrap();
+    let loaded = load_workspace(&connection).unwrap();
+    assert_eq!(task_status(&loaded, "parent"), TaskStatus::Open);
+    assert_eq!(task_status(&loaded, "a"), TaskStatus::Open);
+    assert_eq!(task_status(&loaded, "b"), TaskStatus::Open);
+}
 
-    let first = OccurrenceBatch {
-        rule_id: "daily".into(),
-        expected_through: None,
-        through: "2026-09-18".into(),
-        dates: vec!["2026-09-17".into(), "2026-09-18".into()],
-    };
+#[test]
+fn uncompleting_any_child_opens_parent() {
+    let mut connection = memory_database();
+    mutate_workspace(
+        &mut connection,
+        task_with_subtasks("parent", "Parent", &["a", "b"], true),
+        "2026-09-17",
+    )
+    .unwrap();
+    mutate_workspace(
+        &mut connection,
+        Mutation::SetCompletion {
+            ids: vec!["parent".into()],
+            completed: true,
+        },
+        "2026-09-17",
+    )
+    .unwrap();
+    mutate_workspace(
+        &mut connection,
+        Mutation::SetCompletion {
+            ids: vec!["a".into()],
+            completed: false,
+        },
+        "2026-09-17",
+    )
+    .unwrap();
+    let loaded = load_workspace(&connection).unwrap();
+    assert_eq!(task_status(&loaded, "a"), TaskStatus::Open);
+    assert_eq!(task_status(&loaded, "parent"), TaskStatus::Open);
+    assert_eq!(task_status(&loaded, "b"), TaskStatus::Completed);
+}
+
+#[test]
+fn completing_an_instance_does_not_touch_its_source_or_real_children() {
+    let mut connection = memory_database();
+    mutate_workspace(
+        &mut connection,
+        task_with_subtasks("parent", "Parent", &["child"], true),
+        "2026-09-17",
+    )
+    .unwrap();
+    mutate_workspace(
+        &mut connection,
+        task("series", "Series", None, None, Some(repeat("daily", 1)), false),
+        "2026-09-17",
+    )
+    .unwrap();
+    mutate_workspace(
+        &mut connection,
+        materialize_batch("series", None, "2026-09-17", &["2026-09-17"]),
+        "2026-09-17",
+    )
+    .unwrap();
+
+    mutate_workspace(
+        &mut connection,
+        Mutation::SetCompletion {
+            ids: vec!["occurrence:series:2026-09-17".into()],
+            completed: true,
+        },
+        "2026-09-17",
+    )
+    .unwrap();
+    let loaded = load_workspace(&connection).unwrap();
+    assert_eq!(task_status(&loaded, "series"), TaskStatus::Open);
+    assert_eq!(task_status(&loaded, "parent"), TaskStatus::Open);
+    assert_eq!(task_status(&loaded, "child"), TaskStatus::Open);
+}
+
+#[test]
+fn add_to_today_is_idempotent() {
+    let mut connection = memory_database();
+    mutate_workspace(
+        &mut connection,
+        task("task", "Task", None, None, None, false),
+        "2026-09-17",
+    )
+    .unwrap();
     let loaded = mutate_workspace(
         &mut connection,
-        Mutation::Materialize {
-            batches: vec![first.clone()],
+        Mutation::AddToToday {
+            ids: vec!["task".into()],
         },
         "2026-09-17",
     )
     .unwrap();
-    assert_eq!(loaded.tasks.len(), 2);
+    assert_eq!(loaded.entries.len(), 1);
+    let loaded = mutate_workspace(
+        &mut connection,
+        Mutation::AddToToday {
+            ids: vec!["task".into()],
+        },
+        "2026-09-17",
+    )
+    .unwrap();
+    assert_eq!(loaded.entries.len(), 1);
+}
+
+#[test]
+fn move_to_group_moves_root_and_children_and_validates_project() {
+    let mut connection = memory_database();
+    mutate_workspace(&mut connection, project("a", "A"), "2026-09-17").unwrap();
+    mutate_workspace(&mut connection, project("b", "B"), "2026-09-17").unwrap();
+    mutate_workspace(
+        &mut connection,
+        Mutation::SaveTask {
+            task: TaskDraft {
+                id: "parent".into(),
+                title: "Parent".into(),
+                project_id: Some("a".into()),
+                parent_id: None,
+                priority: Priority::Normal,
+                due_date: None,
+                repeat: None,
+            },
+            subtasks: vec![SubtaskDraft {
+                id: "child".into(),
+                title: "Child".into(),
+            }],
+            schedule_today: true,
+        },
+        "2026-09-17",
+    )
+    .unwrap();
+
+    let loaded = mutate_workspace(
+        &mut connection,
+        Mutation::MoveToGroup {
+            ids: vec!["parent".into()],
+            project_id: Some("b".into()),
+        },
+        "2026-09-17",
+    )
+    .unwrap();
+    let parent = loaded.tasks.iter().find(|t| t.id == "parent").unwrap();
+    let child = loaded.tasks.iter().find(|t| t.id == "child").unwrap();
+    assert_eq!(parent.project_id.as_deref(), Some("b"));
+    assert_eq!(child.project_id.as_deref(), Some("b"));
+
+    assert!(mutate_workspace(
+        &mut connection,
+        Mutation::MoveToGroup {
+            ids: vec!["parent".into()],
+            project_id: Some("missing".into()),
+        },
+        "2026-09-17"
+    )
+    .is_err());
+}
+
+#[test]
+fn materialize_advances_cursor_and_rejects_stale_batches() {
+    let mut connection = memory_database();
+    mutate_workspace(
+        &mut connection,
+        task("series", "Series", None, None, Some(repeat("daily", 1)), false),
+        "2026-09-17",
+    )
+    .unwrap();
+    let loaded = mutate_workspace(
+        &mut connection,
+        materialize_batch("series", None, "2026-09-18", &["2026-09-17", "2026-09-18"]),
+        "2026-09-17",
+    )
+    .unwrap();
+    assert_eq!(loaded.tasks.len(), 3);
+    let source = loaded.tasks.iter().find(|t| t.id == "series").unwrap();
+    assert_eq!(
+        source.recurrence_generated_through.as_deref(),
+        Some("2026-09-18")
+    );
     assert!(loaded
         .tasks
         .iter()
-        .all(|item| item.title == "Current" && item.priority == Priority::High));
-    assert_eq!(
-        loaded
-            .entries
-            .iter()
-            .filter(|entry| entry.local_date.as_str() >= "2026-09-17")
-            .count(),
-        2
-    );
-    assert_eq!(
-        loaded.rules[0].generated_through.as_deref(),
-        Some("2026-09-18")
-    );
+        .all(|t| t.recurrence_source_id.as_deref() == Some("series")
+            || t.id == "series"));
+
+    // Replaying the same batch with a stale cursor is rejected.
     assert!(mutate_workspace(
         &mut connection,
-        Mutation::Materialize {
-            batches: vec![first]
-        },
+        materialize_batch("series", None, "2026-09-18", &["2026-09-17"]),
         "2026-09-17"
     )
     .is_err());
 
-    mutate_workspace(
-        &mut connection,
-        Mutation::SaveRule {
-            rule: rule("daily", None, "Updated after generation"),
-        },
-        "2026-09-17",
-    )
-    .unwrap();
-    assert_eq!(
-        load_workspace(&connection).unwrap().rules[0]
-            .generated_through
-            .as_deref(),
-        Some("2026-09-18")
-    );
-
-    let empty = OccurrenceBatch {
-        rule_id: "daily".into(),
-        expected_through: Some("2026-09-18".into()),
-        through: "2026-09-20".into(),
-        dates: vec![],
-    };
+    // An empty batch still advances the cursor.
     let loaded = mutate_workspace(
         &mut connection,
-        Mutation::Materialize {
-            batches: vec![empty],
-        },
+        materialize_batch("series", Some("2026-09-18"), "2026-09-20", &[]),
         "2026-09-17",
     )
     .unwrap();
+    let source = loaded.tasks.iter().find(|t| t.id == "series").unwrap();
     assert_eq!(
-        loaded.rules[0].generated_through.as_deref(),
+        source.recurrence_generated_through.as_deref(),
         Some("2026-09-20")
     );
 }
 
 #[test]
-fn recurrence_failures_roll_back_every_batch_and_deleted_occurrences_stay_deleted() {
+fn materialize_supplements_across_days() {
     let mut connection = memory_database();
     mutate_workspace(
         &mut connection,
-        Mutation::SaveRule {
-            rule: rule("first", None, "First"),
-        },
+        task("series", "Series", None, None, Some(repeat("daily", 1)), false),
         "2026-09-17",
     )
     .unwrap();
     mutate_workspace(
         &mut connection,
-        Mutation::SaveRule {
-            rule: rule("second", None, "Second"),
-        },
+        materialize_batch("series", None, "2026-09-17", &["2026-09-17"]),
         "2026-09-17",
     )
     .unwrap();
-    let invalid = Mutation::Materialize {
-        batches: vec![
-            OccurrenceBatch {
-                rule_id: "first".into(),
-                expected_through: None,
-                through: "2026-09-17".into(),
-                dates: vec!["2026-09-17".into()],
-            },
-            OccurrenceBatch {
-                rule_id: "second".into(),
-                expected_through: Some("2026-09-16".into()),
-                through: "2026-09-17".into(),
-                dates: vec!["2026-09-17".into()],
-            },
-        ],
-    };
-    assert!(mutate_workspace(&mut connection, invalid, "2026-09-17").is_err());
-    assert!(load_workspace(&connection).unwrap().tasks.is_empty());
-
-    let valid = OccurrenceBatch {
-        rule_id: "first".into(),
-        expected_through: None,
-        through: "2026-09-17".into(),
-        dates: vec!["2026-09-17".into()],
-    };
+    mutate_workspace(
+        &mut connection,
+        materialize_batch("series", Some("2026-09-17"), "2026-09-18", &["2026-09-18"]),
+        "2026-09-17",
+    )
+    .unwrap();
     let loaded = mutate_workspace(
         &mut connection,
-        Mutation::Materialize {
-            batches: vec![valid],
-        },
+        materialize_batch("series", Some("2026-09-18"), "2026-09-19", &["2026-09-19"]),
         "2026-09-17",
     )
     .unwrap();
-    let generated_id = loaded.tasks[0].id.clone();
+    for date in ["2026-09-17", "2026-09-18", "2026-09-19"] {
+        assert!(loaded
+            .tasks
+            .iter()
+            .any(|t| t.id == format!("occurrence:series:{date}")));
+    }
+    assert_eq!(loaded.tasks.len(), 4);
+}
+
+#[test]
+fn batch_mutations_reject_unknown_ids_atomically() {
+    let mut connection = memory_database();
     mutate_workspace(
         &mut connection,
-        Mutation::DeleteTask { id: generated_id },
+        task("task", "Task", None, None, None, true),
         "2026-09-17",
     )
     .unwrap();
-    let stale_range = OccurrenceBatch {
-        rule_id: "first".into(),
-        expected_through: Some("2026-09-17".into()),
-        through: "2026-09-18".into(),
-        dates: vec!["2026-09-17".into(), "2026-09-18".into()],
-    };
+
     assert!(mutate_workspace(
         &mut connection,
-        Mutation::Materialize {
-            batches: vec![stale_range]
+        Mutation::SetCompletion {
+            ids: vec!["task".into(), "missing".into()],
+            completed: true,
         },
         "2026-09-17"
     )
     .is_err());
-    assert!(load_workspace(&connection).unwrap().tasks.is_empty());
+    assert_eq!(task_status(&load_workspace(&connection).unwrap(), "task"), TaskStatus::Open);
+
+    assert!(mutate_workspace(
+        &mut connection,
+        Mutation::DeleteTasks {
+            ids: vec!["missing".into()],
+        },
+        "2026-09-17"
+    )
+    .is_err());
+    assert!(mutate_workspace(
+        &mut connection,
+        Mutation::AddToToday {
+            ids: vec!["missing".into()],
+        },
+        "2026-09-17"
+    )
+    .is_err());
+    assert!(mutate_workspace(
+        &mut connection,
+        Mutation::MoveToGroup {
+            ids: vec!["missing".into()],
+            project_id: None,
+        },
+        "2026-09-17"
+    )
+    .is_err());
+    assert_eq!(load_workspace(&connection).unwrap().tasks.len(), 1);
 }
 
 #[test]
-fn deleting_a_rule_leaves_materialized_tasks() {
+fn materialize_skips_tombstoned_dates() {
     let mut connection = memory_database();
     mutate_workspace(
         &mut connection,
-        Mutation::SaveRule {
-            rule: rule("daily", None, "Repeat"),
-        },
+        task("series", "Series", None, None, Some(repeat("daily", 1)), false),
         "2026-09-17",
     )
     .unwrap();
-    let batch = OccurrenceBatch {
-        rule_id: "daily".into(),
-        expected_through: None,
-        through: "2026-09-17".into(),
-        dates: vec!["2026-09-17".into()],
-    };
-    mutate_workspace(
-        &mut connection,
-        Mutation::Materialize {
-            batches: vec![batch],
-        },
-        "2026-09-17",
-    )
-    .unwrap();
+    // A tombstone: an occurrence row whose task was already deleted.
+    connection
+        .execute(
+            "INSERT INTO recurrence_occurrences(source_task_id,occurrence_date,task_id) VALUES ('series','2026-09-17',NULL)",
+            [],
+        )
+        .unwrap();
+
     let loaded = mutate_workspace(
         &mut connection,
-        Mutation::DeleteRule { id: "daily".into() },
+        materialize_batch(
+            "series",
+            None,
+            "2026-09-18",
+            &["2026-09-17", "2026-09-18"],
+        ),
         "2026-09-17",
     )
     .unwrap();
-    assert!(loaded.rules.is_empty());
-    assert_eq!(loaded.tasks.len(), 1);
+    let has_17 = loaded
+        .tasks
+        .iter()
+        .any(|t| t.id == "occurrence:series:2026-09-17");
+    let has_18 = loaded
+        .tasks
+        .iter()
+        .any(|t| t.id == "occurrence:series:2026-09-18");
+    assert!(!has_17);
+    assert!(has_18);
+}
+
+#[test]
+fn deleting_an_instance_leaves_a_tombstone_and_stays_deleted() {
+    let mut connection = memory_database();
+    mutate_workspace(
+        &mut connection,
+        task("series", "Series", None, None, Some(repeat("daily", 1)), false),
+        "2026-09-17",
+    )
+    .unwrap();
+    mutate_workspace(
+        &mut connection,
+        materialize_batch(
+            "series",
+            None,
+            "2026-09-18",
+            &["2026-09-17", "2026-09-18"],
+        ),
+        "2026-09-17",
+    )
+    .unwrap();
+
+    mutate_workspace(
+        &mut connection,
+        Mutation::DeleteTasks {
+            ids: vec!["occurrence:series:2026-09-17".into()],
+        },
+        "2026-09-17",
+    )
+    .unwrap();
+
+    let task_id: Option<String> = connection
+        .query_row(
+            "SELECT task_id FROM recurrence_occurrences WHERE source_task_id='series' AND occurrence_date='2026-09-17'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(task_id, None);
+
+    let loaded = load_workspace(&connection).unwrap();
+    assert!(loaded
+        .tasks
+        .iter()
+        .any(|t| t.id == "occurrence:series:2026-09-18"));
+    assert!(!loaded
+        .tasks
+        .iter()
+        .any(|t| t.id == "occurrence:series:2026-09-17"));
+
+    // A later materialize does not bring the deleted instance back.
+    let loaded = mutate_workspace(
+        &mut connection,
+        materialize_batch("series", Some("2026-09-18"), "2026-09-19", &["2026-09-19"]),
+        "2026-09-17",
+    )
+    .unwrap();
+    assert!(!loaded
+        .tasks
+        .iter()
+        .any(|t| t.id == "occurrence:series:2026-09-17"));
+    assert!(loaded
+        .tasks
+        .iter()
+        .any(|t| t.id == "occurrence:series:2026-09-19"));
+}
+
+#[test]
+fn deleting_a_source_task_deletes_its_instances() {
+    let mut connection = memory_database();
+    mutate_workspace(
+        &mut connection,
+        task("series", "Series", None, None, Some(repeat("daily", 1)), false),
+        "2026-09-17",
+    )
+    .unwrap();
+    mutate_workspace(
+        &mut connection,
+        materialize_batch(
+            "series",
+            None,
+            "2026-09-18",
+            &["2026-09-17", "2026-09-18"],
+        ),
+        "2026-09-17",
+    )
+    .unwrap();
+
+    let loaded = mutate_workspace(
+        &mut connection,
+        Mutation::DeleteTasks {
+            ids: vec!["series".into()],
+        },
+        "2026-09-17",
+    )
+    .unwrap();
+    assert!(loaded.tasks.is_empty());
+    let occ_count: i64 = connection
+        .query_row("SELECT count(*) FROM recurrence_occurrences", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(occ_count, 0);
+}
+
+#[test]
+fn carryover_moves_open_tasks_forward_without_changing_created_on() {
+    let mut connection = memory_database();
+    mutate_workspace(
+        &mut connection,
+        task("task", "Task", None, None, None, true),
+        "2026-09-15",
+    )
+    .unwrap();
+    let loaded = mutate_workspace(&mut connection, Mutation::Carryover, "2026-09-17").unwrap();
+    let task = loaded.tasks.iter().find(|t| t.id == "task").unwrap();
+    assert_eq!(task.created_on, "2026-09-15");
+    assert!(loaded
+        .entries
+        .iter()
+        .any(|e| e.task_id == "task"
+            && e.local_date == "2026-09-17"
+            && e.carried_from_date.as_deref() == Some("2026-09-15")));
+}
+
+#[test]
+fn repeat_from_rrule_maps_legacy_strings() {
+    assert_eq!(
+        super::repeat_from_rrule("FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR").unwrap(),
+        RepeatRule {
+            freq: "weekdays".into(),
+            interval: 1
+        }
+    );
+    assert_eq!(
+        super::repeat_from_rrule("FREQ=DAILY;INTERVAL=3").unwrap(),
+        RepeatRule {
+            freq: "daily".into(),
+            interval: 3
+        }
+    );
+    assert_eq!(
+        super::repeat_from_rrule("FREQ=DAILY").unwrap(),
+        RepeatRule {
+            freq: "daily".into(),
+            interval: 1
+        }
+    );
+    assert_eq!(
+        super::repeat_from_rrule("FREQ=WEEKLY;INTERVAL=2").unwrap(),
+        RepeatRule {
+            freq: "weekly".into(),
+            interval: 2
+        }
+    );
+    assert_eq!(
+        super::repeat_from_rrule("freq=monthly;interval=4").unwrap(),
+        RepeatRule {
+            freq: "monthly".into(),
+            interval: 4
+        }
+    );
+    assert!(super::repeat_from_rrule("FREQ=YEARLY").is_err());
+}
+
+#[test]
+fn load_workspace_returns_source_tasks_after_migration() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("legacy.sqlite");
+    {
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(include_str!("../../migrations/001_initial.sql"))
+            .unwrap();
+        conn.execute_batch(include_str!("../../migrations/002_recurrence_cursor.sql"))
+            .unwrap();
+        conn.pragma_update(None, "user_version", 2).unwrap();
+        conn.execute(
+            "INSERT INTO recurrence_rules(id,template_json,rrule,start_date,time_zone,generated_through) VALUES ('rule',?1,'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR','2026-09-01','UTC','2026-09-03')",
+            [r#"{"projectId":null,"title":"Series","priority":"normal","dueDate":null}"#],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO tasks(id,title,status,priority,scheduled_date,created_at,updated_at) VALUES ('occurrence:rule:2026-09-03','Series','open','normal','2026-09-03','2026-09-03T00:00:00Z','2026-09-03T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO recurrence_occurrences(rule_id,occurrence_date,task_id) VALUES ('rule','2026-09-03','occurrence:rule:2026-09-03')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO daily_entries(id,task_id,local_date) VALUES ('entry:occurrence:rule:2026-09-03:2026-09-03','occurrence:rule:2026-09-03','2026-09-03')",
+            [],
+        )
+        .unwrap();
+    }
+
+    let connection = storage::open_database(&path).unwrap();
+    let loaded = load_workspace(&connection).unwrap();
+    let source = loaded.tasks.iter().find(|t| t.id == "series:rule").unwrap();
+    assert_eq!(source.repeat.as_ref().unwrap().freq, "weekdays");
+    assert_eq!(source.repeat.as_ref().unwrap().interval, 1);
+    assert_eq!(source.recurrence_source_id, None);
+    assert_eq!(
+        source.recurrence_generated_through.as_deref(),
+        Some("2026-09-03")
+    );
+    let instance = loaded
+        .tasks
+        .iter()
+        .find(|t| t.id == "occurrence:rule:2026-09-03")
+        .unwrap();
+    assert_eq!(instance.recurrence_source_id.as_deref(), Some("series:rule"));
+    assert_eq!(loaded.entries.len(), 1);
 }
 
 #[test]
@@ -573,8 +889,10 @@ fn serde_contract_matches_the_typescript_ipc_shape() {
             "parentId": null,
             "priority": "normal",
             "dueDate": null,
-            "scheduledDate": "2026-09-17"
-        }
+            "repeat": null
+        },
+        "subtasks": [],
+        "scheduleToday": true
     }))
     .unwrap();
     assert!(matches!(mutation, Mutation::SaveTask { .. }));
@@ -582,22 +900,121 @@ fn serde_contract_matches_the_typescript_ipc_shape() {
     let mut connection = memory_database();
     let workspace = mutate_workspace(
         &mut connection,
-        task("task", "Task", None, None, Some("2026-09-17")),
+        task("task", "Task", None, None, None, true),
         "2026-09-17",
     )
     .unwrap();
     let json = serde_json::to_value(workspace).unwrap();
-    assert_eq!(json["tasks"][0]["scheduledDate"], "2026-09-17");
+    assert_eq!(json["tasks"][0]["createdOn"], "2026-09-17");
+    assert_eq!(json["tasks"][0]["repeat"], serde_json::Value::Null);
+    assert_eq!(
+        json["tasks"][0]["recurrenceSourceId"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        json["tasks"][0]["recurrenceGeneratedThrough"],
+        serde_json::Value::Null
+    );
+    assert!(json["tasks"][0].get("scheduledDate").is_none());
+    assert!(json.get("rules").is_none());
     assert_eq!(json["settings"]["schemaVersion"], 1);
+}
+
+#[test]
+fn validation_and_failed_mutations_are_atomic() {
+    let mut connection = memory_database();
+    mutate_workspace(
+        &mut connection,
+        task_with_subtasks("parent", "Parent", &["child"], true),
+        "2026-09-17",
+    )
+    .unwrap();
+
+    // Deep nesting is rejected: child already has a parent.
+    assert!(mutate_workspace(
+        &mut connection,
+        task("deep", "Deep", None, Some("child"), None, true),
+        "2026-09-17"
+    )
+    .is_err());
+    // A task cannot be its own parent.
+    assert!(mutate_workspace(
+        &mut connection,
+        task("parent", "Parent", None, Some("parent"), None, true),
+        "2026-09-17"
+    )
+    .is_err());
+    // A subtask cannot carry subtasks of its own.
+    assert!(mutate_workspace(
+        &mut connection,
+        Mutation::SaveTask {
+            task: TaskDraft {
+                id: "child".into(),
+                title: "Child".into(),
+                project_id: None,
+                parent_id: Some("parent".into()),
+                priority: Priority::Normal,
+                due_date: None,
+                repeat: None,
+            },
+            subtasks: vec![SubtaskDraft {
+                id: "grand".into(),
+                title: "Grand".into(),
+            }],
+            schedule_today: true,
+        },
+        "2026-09-17"
+    )
+    .is_err());
+    // Bad date and bad project are rejected.
+    assert!(mutate_workspace(
+        &mut connection,
+        Mutation::SaveTask {
+            task: TaskDraft {
+                id: "bad-date".into(),
+                title: "Date".into(),
+                project_id: None,
+                parent_id: None,
+                priority: Priority::Normal,
+                due_date: Some("2026-02-30".into()),
+                repeat: None,
+            },
+            subtasks: vec![],
+            schedule_today: true,
+        },
+        "2026-09-17"
+    )
+    .is_err());
+    assert!(mutate_workspace(&mut connection, Mutation::Carryover, "0000-01-01").is_err());
+    assert!(mutate_workspace(&mut connection, project("blank", "   "), "2026-09-17").is_err());
+    // Bad repeat interval is rejected.
+    assert!(mutate_workspace(
+        &mut connection,
+        task("bad-repeat", "Repeat", None, None, Some(repeat("daily", 0)), false),
+        "2026-09-17"
+    )
+    .is_err());
+    assert!(mutate_workspace(
+        &mut connection,
+        task("bad-freq", "Repeat", None, None, Some(repeat("yearly", 1)), false),
+        "2026-09-17"
+    )
+    .is_err());
+
+    assert_eq!(load_workspace(&connection).unwrap().tasks.len(), 2);
 }
 
 #[test]
 fn sql_failure_does_not_commit_a_partial_save() {
     let mut connection = memory_database();
-    connection.execute_batch("CREATE TRIGGER reject_entry BEFORE INSERT ON daily_entries BEGIN SELECT RAISE(ABORT, 'forced failure'); END;").unwrap();
+    connection
+        .execute_batch(
+            "CREATE TRIGGER reject_entry BEFORE INSERT ON daily_entries BEGIN SELECT RAISE(ABORT, 'forced failure'); END;",
+        )
+        .unwrap();
     let error = mutate_workspace(
         &mut connection,
-        task("task", "Task", None, None, Some("2026-09-17")),
+        task("task", "Task", None, None, None, true),
         "2026-09-17",
     )
     .unwrap_err();
@@ -609,15 +1026,32 @@ fn sql_failure_does_not_commit_a_partial_save() {
 }
 
 #[test]
-fn recurrence_occurrence_rows_remain_unique() {
+fn recurrence_occurrence_rows_remain_unique_per_source_and_date() {
     let connection = memory_database();
-    connection.execute(
-        "INSERT INTO recurrence_rules(id,template_json,rrule,start_date,time_zone,generated_through) VALUES ('rule',?1,'FREQ=DAILY','2026-09-01','UTC',NULL)",
-        [r#"{"projectId":null,"title":"Task","priority":"normal","dueDate":null}"#],
-    ).unwrap();
+    connection
+        .execute(
+            "INSERT INTO tasks(id,title,status,priority,created_on,created_at,updated_at) VALUES ('series','Task','open','normal','2026-09-17','2026-09-17T00:00:00Z','2026-09-17T00:00:00Z')",
+            [],
+        )
+        .unwrap();
     for id in ["one", "two"] {
-        connection.execute("INSERT INTO tasks(id,title,status,priority,created_at,updated_at) VALUES (?1,'Task','open','normal','2026-09-17T00:00:00Z','2026-09-17T00:00:00Z')", [id]).unwrap();
+        connection
+            .execute(
+                "INSERT INTO tasks(id,title,status,priority,created_on,created_at,updated_at) VALUES (?1,'Task','open','normal','2026-09-17','2026-09-17T00:00:00Z','2026-09-17T00:00:00Z')",
+                [id],
+            )
+            .unwrap();
     }
-    connection.execute("INSERT INTO recurrence_occurrences(rule_id,occurrence_date,task_id) VALUES ('rule','2026-09-17','one')", []).unwrap();
-    assert!(connection.execute("INSERT INTO recurrence_occurrences(rule_id,occurrence_date,task_id) VALUES ('rule','2026-09-17','two')", []).is_err());
+    connection
+        .execute(
+            "INSERT INTO recurrence_occurrences(source_task_id,occurrence_date,task_id) VALUES ('series','2026-09-17','one')",
+            [],
+        )
+        .unwrap();
+    assert!(connection
+        .execute(
+            "INSERT INTO recurrence_occurrences(source_task_id,occurrence_date,task_id) VALUES ('series','2026-09-17','two')",
+            [],
+        )
+        .is_err());
 }

@@ -94,30 +94,99 @@ fn migrates_version_one_rules_with_a_nullable_generation_cursor() {
 
     initialize(&mut conn).unwrap();
 
-    let cursor: Option<String> = conn
+    let rgt: Option<String> = conn
         .query_row(
-            "SELECT generated_through FROM recurrence_rules WHERE id='rule'",
+            "SELECT recurrence_generated_through FROM tasks WHERE id='series:rule'",
             [],
             |row| row.get(0),
         )
         .unwrap();
-    let settings_version: i64 = conn
+    assert_eq!(rgt, None);
+    let created_on: String = conn
         .query_row(
-            "SELECT schema_version FROM settings WHERE id=1",
+            "SELECT created_on FROM tasks WHERE id='scheduled'",
             [],
             |row| row.get(0),
         )
         .unwrap();
-    let scheduled_date: Option<String> = conn
+    assert_eq!(created_on, "2026-09-16");
+    let entry_count: i64 = conn
+        .query_row("SELECT count(*) FROM daily_entries", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(entry_count, 1);
+    assert_eq!(
+        conn.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
+            .unwrap(),
+        SCHEMA_VERSION
+    );
+}
+
+#[test]
+fn migrates_version_two_recurrence_rules_into_source_tasks() {
+    let mut conn = Connection::open_in_memory().unwrap();
+    conn.execute_batch(include_str!("../../migrations/001_initial.sql"))
+        .unwrap();
+    conn.execute_batch(include_str!("../../migrations/002_recurrence_cursor.sql"))
+        .unwrap();
+    conn.pragma_update(None, "user_version", 2).unwrap();
+    conn.execute(
+        "INSERT INTO recurrence_rules(id,template_json,rrule,start_date,time_zone,generated_through)
+         VALUES ('rule',?1,'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR','2026-09-16','Asia/Shanghai','2026-09-16')",
+        [r#"{"projectId":null,"title":"Task","priority":"normal","dueDate":null}"#],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO tasks(id,title,status,priority,scheduled_date,created_at,updated_at)
+         VALUES ('occurrence:rule:2026-09-16','Task','open','normal','2026-09-16','2026-09-16T00:00:00Z','2026-09-16T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO recurrence_occurrences(rule_id,occurrence_date,task_id)
+         VALUES ('rule','2026-09-16','occurrence:rule:2026-09-16')",
+        [],
+    )
+    .unwrap();
+
+    initialize(&mut conn).unwrap();
+
+    let rules_table_count: i64 = conn
         .query_row(
-            "SELECT scheduled_date FROM tasks WHERE id='scheduled'",
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='recurrence_rules'",
             [],
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(cursor, None);
-    assert_eq!(scheduled_date.as_deref(), Some("2026-09-15"));
-    assert_eq!(settings_version, 1);
+    assert_eq!(rules_table_count, 0);
+
+    let (repeat, created_on, rgt): (String, String, Option<String>) = conn
+        .query_row(
+            "SELECT repeat,created_on,recurrence_generated_through FROM tasks WHERE id='series:rule'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(repeat, r#"{"freq":"weekdays","interval":1}"#);
+    assert_eq!(created_on, "2026-09-16");
+    assert_eq!(rgt.as_deref(), Some("2026-09-16"));
+
+    let rsi: Option<String> = conn
+        .query_row(
+            "SELECT recurrence_source_id FROM tasks WHERE id='occurrence:rule:2026-09-16'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(rsi.as_deref(), Some("series:rule"));
+
+    let occ_count: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM recurrence_occurrences WHERE source_task_id='series:rule' AND occurrence_date='2026-09-16'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(occ_count, 1);
     assert_eq!(
         conn.pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
             .unwrap(),
@@ -158,19 +227,19 @@ fn prevents_deep_nesting_and_parent_cycles() {
 }
 
 #[test]
-fn one_rule_date_cannot_create_two_occurrences() {
+fn one_source_date_cannot_create_two_occurrences() {
     let mut conn = Connection::open_in_memory().unwrap();
     initialize(&mut conn).unwrap();
-    insert_task(&conn, "occurrence-a", None).unwrap();
-    insert_task(&conn, "occurrence-b", None).unwrap();
     conn.execute(
-        "INSERT INTO recurrence_rules(id,template_json,rrule,start_date,time_zone)
-         VALUES ('rule-a',?1,'FREQ=DAILY','2026-09-16','Asia/Shanghai')",
-        [r#"{"projectId":null,"title":"Task","priority":"normal","dueDate":null}"#],
+        "INSERT INTO tasks(id,title,status,priority,created_on,created_at,updated_at)
+         VALUES ('source','Task','open','normal','2026-09-16','2026-09-16T00:00:00Z','2026-09-16T00:00:00Z')",
+        [],
     )
     .unwrap();
-    let sql = "INSERT INTO recurrence_occurrences(rule_id,occurrence_date,task_id)
-               VALUES ('rule-a','2026-09-16',?1)";
+    insert_task(&conn, "occurrence-a", None).unwrap();
+    insert_task(&conn, "occurrence-b", None).unwrap();
+    let sql = "INSERT INTO recurrence_occurrences(source_task_id,occurrence_date,task_id)
+               VALUES ('source','2026-09-16',?1)";
     conn.execute(sql, ["occurrence-a"]).unwrap();
     assert!(conn.execute(sql, ["occurrence-b"]).is_err());
 }
