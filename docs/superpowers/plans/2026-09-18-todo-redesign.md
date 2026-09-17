@@ -83,6 +83,9 @@ pub struct OccurrenceBatch { source_task_id: String, expected_through: Option<St
 `src-tauri/migrations/003_redesign.sql`：
 
 ```sql
+DROP INDEX IF EXISTS tasks_scheduled_date;
+ALTER TABLE tasks DROP COLUMN scheduled_date;
+
 ALTER TABLE tasks ADD COLUMN repeat TEXT CHECK(repeat IS NULL OR json_valid(repeat));
 ALTER TABLE tasks ADD COLUMN created_on TEXT;
 ALTER TABLE tasks ADD COLUMN recurrence_source_id TEXT;

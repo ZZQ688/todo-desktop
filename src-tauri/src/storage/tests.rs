@@ -74,6 +74,38 @@ fn refuses_a_newer_schema_without_downgrading_it() {
 }
 
 #[test]
+fn migration_drops_scheduled_date_column_and_index() {
+    let mut conn = Connection::open_in_memory().unwrap();
+    conn.execute_batch(include_str!("../../migrations/001_initial.sql"))
+        .unwrap();
+    conn.execute_batch(include_str!("../../migrations/002_recurrence_cursor.sql"))
+        .unwrap();
+    conn.pragma_update(None, "user_version", 2).unwrap();
+    insert_task(&conn, "task", None).unwrap();
+    conn.execute("UPDATE tasks SET scheduled_date='2026-09-16' WHERE id='task'", [])
+        .unwrap();
+
+    initialize(&mut conn).unwrap();
+
+    let scheduled_cols: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM pragma_table_info('tasks') WHERE name='scheduled_date'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(scheduled_cols, 0);
+    let index_count: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM pragma_index_list('tasks') WHERE name='tasks_scheduled_date'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(index_count, 0);
+}
+
+#[test]
 fn migrates_version_one_rules_with_a_nullable_generation_cursor() {
     let mut conn = Connection::open_in_memory().unwrap();
     conn.execute_batch(include_str!("../../migrations/001_initial.sql"))
