@@ -17,8 +17,8 @@ This is the handover record for source revision
 | Screenshot inspection | Daily, project, and settings views inspected; no overlap or overflow found | PASS |
 | Rust formatting | Rust 1.98.1 in an isolated `/tmp` toolchain; real `cargo fmt --check` completed successfully | PASS |
 | Final source review | Review found Rust formatting and Today-at-midnight defects; both were fixed in `c51b42e` and independently re-reviewed | PASS |
-| GitHub delivery | Private repository `ZZQ688/todo-desktop`; tested application `c51b42e` is on `main`, with final verification record at `9b1054d` | PASS |
-| Hosted checks | Checks run `35174591687`, completed successfully for `c51b42e` | PASS |
+| GitHub delivery | Private repository `ZZQ688/todo-desktop`; tested application `c51b42e` is on `main`, with final verification record at `8d8d4e7` | PASS |
+| Hosted checks | Checks runs `35174591687` and `35183210915`, completed successfully for the delivered revisions | PASS |
 | Windows installer | Windows Installer run `35174604276`, completed successfully; NSIS `.exe` downloaded and inspected | PASS |
 | Native desktop IPC | Requires a real Windows application launch and `health_check` round trip | PENDING MANUAL |
 | Offline startup and database reopen | Requires installation and offline testing on Windows | PENDING MANUAL |
@@ -64,7 +64,7 @@ revision. The tested application revision is:
 c51b42e9119067da0a767a3d7b1e54c08f408f69
 ```
 
-The final verification record is commit `9b1054d0ecec6bc74e475a8c285d6ba28d457d60`;
+The final verification record is commit `8d8d4e7937304bec4bd2030f53534149c0a24c14`;
 local and remote `main` resolve to that documentation commit.
 
 The tracked-file audit found no database, credentials, original Word document,
