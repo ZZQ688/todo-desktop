@@ -117,6 +117,12 @@ main { min-width: 0; width: 100%; max-width: 1120px; padding: 25px 30px 50px; }
 .task-title-line { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
 .task-title { min-width: 0; font-weight: 550; overflow-wrap: anywhere; }
 .task-title.completed { color: #737a75; text-decoration: line-through; }
+.priority-dot-view { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
+.priority-dot-view--low { background: #3f9d3f; }
+.priority-dot-view--normal { background: #e0b72f; }
+.priority-dot-view--high { background: #d9413a; }
+.repeat-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; line-height: 1; padding: 3px 5px; border-radius: 3px; font-weight: 600; color: #59615b; background: #e9ece9; }
+.repeat-badge svg { width: 12px; height: 12px; flex: 0 0 12px; }
 .priority { font-size: 11px; line-height: 1; padding: 3px 5px; border-radius: 3px; font-weight: 600; }
 .priority-high { color: #982d2d; background: #f9dddd; }
 .priority-normal { color: #59615b; background: #e9ece9; }
