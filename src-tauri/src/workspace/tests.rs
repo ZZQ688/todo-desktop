@@ -174,6 +174,28 @@ fn crud_persists_and_subtasks_follow_parent_group() {
 }
 
 #[test]
+fn adding_a_child_in_the_today_context_lands_it_in_today() {
+    let mut connection = memory_database();
+    let today = "2026-09-18";
+    mutate_workspace(&mut connection, task("parent", "Parent", None, None, None, true), today)
+        .unwrap();
+    mutate_workspace(
+        &mut connection,
+        task("child", "Child", None, Some("parent"), None, true),
+        today,
+    )
+    .unwrap();
+    let loaded = load_workspace(&connection).unwrap();
+    let child_entries: Vec<_> = loaded
+        .entries
+        .iter()
+        .filter(|e| e.task_id == "child")
+        .collect();
+    assert_eq!(child_entries.len(), 1);
+    assert_eq!(child_entries[0].local_date, today);
+}
+
+#[test]
 fn save_task_reconciles_subtasks_replacing_removed_ones() {
     let mut connection = memory_database();
     mutate_workspace(

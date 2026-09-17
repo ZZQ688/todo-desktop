@@ -414,7 +414,7 @@ fn save_task(
         delete_children_except(tx, &draft.id, &keep)?;
     }
 
-    if schedule_today && draft.parent_id.is_none() && repeat.is_none() {
+    if schedule_today && repeat.is_none() {
         insert_entry(tx, &draft.id, today, None)?;
         for sub in &subtasks {
             insert_entry(tx, &sub.id, today, None)?;

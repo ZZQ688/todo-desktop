@@ -166,7 +166,7 @@ pub fn migrate_recurrence_rules(tx: &Transaction<'_>) -> Result<(), WorkspaceErr
 - effective_project = 父的 project（若有父）否则 draft.project_id（校验项目存在或 null）。
 - upsert 父：新任务 `created_on = today`（已有任务保持原 `created_on`）；`repeat` 存 JSON；`recurrence_source_id`/`recurrence_generated_through` 为 null（编辑源任务时保留其 `recurrence_generated_through` 与 `recurrence_source_id` 不动）。
 - 子任务对账：对每个 `subtasks` upsert（`parent_id=父id`、`project_id=effective_project`、`priority=父priority`、`created_on=today` 或保留）；删除父的「不在 subtasks 列表」的旧子。
-- 若 `schedule_today` 为真且任务为根（`parent_id` 为空）：为新父任务及其子任务各写一条今日 entry（`insert_entry(tx, id, today, None)`）。这样「每日视图新建」原子地落进今天。项目视图新建时 `schedule_today=false`（只进分组）。重复源任务不在此写 entry，改由后续 `Materialize` 生成今日实例。
+- 若 `schedule_today` 为真且任务非重复（`repeat` 为空）：为该任务写一条今日 entry（`insert_entry(tx, id, today, None)`），若它是根任务再为其 `subtasks` 各写一条今日 entry。这样「每日视图新建」原子地落进今天——包括「给今日父任务添加子任务」时子任务也立即进入今天。项目视图新建时 `schedule_today=false`（只进分组）。重复源任务不在此写 entry，改由后续 `Materialize` 生成今日实例。
 
 `set_completion(tx, ids, completed)`：先对每个 id 更新自身 status/completed_at；再执行级联闭包：
 - 若 `completed`：把「父在 ids 中的任务的子」全部置 completed；把「所有子都 completed 的父」置 completed（含刚被改的子引发的父）。

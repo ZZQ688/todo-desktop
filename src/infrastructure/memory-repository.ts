@@ -218,8 +218,8 @@ function saveTask(
     removeTasksAndEntries(state, new Set(removed));
   }
 
-  // Scheduling today applies only to non-recurring root tasks and their subtasks.
-  if (scheduleToday && draft.parentId === null && repeat === null) {
+  // Scheduling today applies to non-recurring tasks (and, for a root, its subtasks).
+  if (scheduleToday && repeat === null) {
     insertEntry(state, draft.id, today);
     for (const sub of subtasks) insertEntry(state, sub.id, today);
   }

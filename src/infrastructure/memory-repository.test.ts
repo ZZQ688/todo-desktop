@@ -96,6 +96,14 @@ test("saveTask with scheduleToday writes today entries for a root and its subtas
   expect(result.entries.map((e) => e.taskId).sort()).toEqual(["child", "parent"]);
 });
 
+test("adding a child in the today context lands it in today", async () => {
+  const repo = createMemoryRepository();
+  await repo.mutate({ kind: "saveTask", task: draft("parent"), subtasks: [], scheduleToday: true }, day);
+  const result = await repo.mutate({ kind: "saveTask", task: draft("child", { parentId: "parent" }),
+    subtasks: [], scheduleToday: true }, day);
+  expect(result.entries.map((e) => e.taskId).sort()).toEqual(["child", "parent"]);
+});
+
 test("a recurring source task does not get a today entry from saveTask", async () => {
   const repo = createMemoryRepository();
   const result = await repo.mutate({ kind: "saveTask",
