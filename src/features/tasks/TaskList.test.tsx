@@ -22,6 +22,7 @@ function renderList(props: {
   tasks?: Task[];
   projects?: Project[];
   onAddToToday?: (task: Task) => void;
+  readOnly?: boolean;
 } = {}) {
   const groups = props.groups ?? [];
   const tasks = props.tasks ?? groups.map(({ parent }) => parent);
@@ -30,7 +31,7 @@ function renderList(props: {
   const onAddChild = vi.fn();
   render(<TaskList groups={groups} tasks={tasks} projects={props.projects ?? []}
     busy={false} error={null} run={run} onEdit={onEdit} onAddChild={onAddChild}
-    onAddToToday={props.onAddToToday} />);
+    onAddToToday={props.onAddToToday} readOnly={props.readOnly} />);
   return { run, onEdit, onAddChild };
 }
 
@@ -98,6 +99,16 @@ test("checkbox uses the batch setCompletion mutation", async () => {
   const { run } = renderList({ groups: [{ parent: task("t1", { title: "写报告" }), children: [] }] });
   await user.click(screen.getByRole("checkbox", { name: "完成 写报告" }));
   expect(run).toHaveBeenCalledWith({ kind: "setCompletion", ids: ["t1"], completed: true });
+});
+
+test("readOnly suppresses the checkbox and row action buttons", () => {
+  const t = task("t1", { title: "写报告" });
+  renderList({ groups: [{ parent: t, children: [] }], onAddToToday: vi.fn(), readOnly: true });
+  expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "编辑 写报告" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "删除 写报告" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "加入 写报告 到今日" })).not.toBeInTheDocument();
+  expect(screen.getByText("写报告")).toBeInTheDocument();
 });
 
 test("delete confirm uses the batch deleteTasks mutation", async () => {

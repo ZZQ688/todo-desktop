@@ -139,6 +139,7 @@ main { min-width: 0; width: 100%; max-width: 1120px; padding: 25px 30px 50px; }
 .context-marker { width: 8px; height: 8px; border-radius: 50%; background: #9ca59f; justify-self: center; }
 .context-label { color: #727973; font-size: 11px; }
 .empty-state { margin: 18px 0 0; padding: 24px 4px; border-top: 1px solid #dfe3e0; color: #6a716c; }
+.history-hint { margin: 0 0 12px; color: #6a716c; }
 .compact-empty { padding: 15px 0; }
 .error-banner {
   display: flex;
