@@ -120,3 +120,62 @@ test("creates tasks in this view with scheduleToday false", async () => {
   await user.click(within(dialog).getByRole("button", { name: "保存" }));
   expect(run).toHaveBeenCalledWith(expect.objectContaining({ kind: "saveTask", scheduleToday: false }));
 });
+
+function multiSelectWorkspace(overrides: Partial<Workspace> = {}): Workspace {
+  return workspace({
+    tasks: [task("t1", { title: "写报告" }), task("t2", { title: "开会" })],
+    ...overrides,
+  });
+}
+
+async function enterSelection(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "多选" }));
+  await user.click(screen.getByRole("checkbox", { name: "选择 写报告" }));
+  await user.click(screen.getByRole("checkbox", { name: "选择 开会" }));
+}
+
+test("bulk 完成 dispatches setCompletion with every selected id", async () => {
+  const user = userEvent.setup();
+  const { run } = renderView({ workspace: multiSelectWorkspace() });
+  await enterSelection(user);
+  await user.click(screen.getByRole("button", { name: "完成" }));
+  expect(run).toHaveBeenCalledWith({ kind: "setCompletion", ids: ["t1", "t2"], completed: true });
+});
+
+test("bulk 删除 dispatches deleteTasks with every selected id", async () => {
+  const user = userEvent.setup();
+  const { run } = renderView({ workspace: multiSelectWorkspace() });
+  await enterSelection(user);
+  await user.click(screen.getByRole("button", { name: "删除" }));
+  expect(run).toHaveBeenCalledWith({ kind: "deleteTasks", ids: ["t1", "t2"] });
+});
+
+test("移动分组 dispatches moveToGroup with the chosen project id", async () => {
+  const user = userEvent.setup();
+  const { run } = renderView({
+    workspace: multiSelectWorkspace({ projects: [project("p1", "工作")] }),
+  });
+  await enterSelection(user);
+  await user.selectOptions(screen.getByLabelText("移动分组"), "p1");
+  expect(run).toHaveBeenCalledWith({ kind: "moveToGroup", ids: ["t1", "t2"], projectId: "p1" });
+});
+
+test("退出 clears selection and leaves selection mode", async () => {
+  const user = userEvent.setup();
+  renderView({ workspace: multiSelectWorkspace() });
+  await enterSelection(user);
+  await user.click(screen.getByRole("button", { name: "退出" }));
+  expect(screen.queryByText(/已选/)).not.toBeInTheDocument();
+  expect(screen.queryByRole("checkbox", { name: "选择 写报告" })).not.toBeInTheDocument();
+  expect(screen.getByRole("checkbox", { name: "完成 写报告" })).toBeInTheDocument();
+});
+
+test("Escape exits selection mode and clears selection", async () => {
+  const user = userEvent.setup();
+  renderView({ workspace: multiSelectWorkspace() });
+  await enterSelection(user);
+  await user.keyboard("{Escape}");
+  expect(screen.queryByText(/已选/)).not.toBeInTheDocument();
+  expect(screen.queryByRole("checkbox", { name: "选择 写报告" })).not.toBeInTheDocument();
+  expect(screen.getByRole("checkbox", { name: "完成 写报告" })).toBeInTheDocument();
+});

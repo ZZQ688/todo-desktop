@@ -82,3 +82,60 @@ test("a past date renders a read-only history with no checkbox or row actions", 
   expect(screen.queryByRole("button", { name: "添加任务" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "回到今天" })).toBeInTheDocument();
 });
+
+function scheduledWorkspace(): Workspace {
+  return workspace({
+    tasks: [task("t1", { title: "写报告" }), task("t2", { title: "开会" })],
+    entries: [
+      { id: "e1", taskId: "t1", localDate: today, carriedFromDate: null },
+      { id: "e2", taskId: "t2", localDate: today, carriedFromDate: null },
+    ],
+  });
+}
+
+test("hides the 多选 toggle on a read-only past date", () => {
+  renderView({ date: past, workspace: workspace({
+    tasks: [task("t1", { title: "写报告" })],
+    entries: [{ id: "e1", taskId: "t1", localDate: past, carriedFromDate: null }],
+  }) });
+  expect(screen.queryByRole("button", { name: "多选" })).not.toBeInTheDocument();
+});
+
+test("bulk 完成 dispatches setCompletion with every selected id", async () => {
+  const user = userEvent.setup();
+  const { run } = renderView({ workspace: scheduledWorkspace() });
+  await user.click(screen.getByRole("button", { name: "多选" }));
+  await user.click(screen.getByRole("checkbox", { name: "选择 写报告" }));
+  await user.click(screen.getByRole("checkbox", { name: "选择 开会" }));
+  await user.click(screen.getByRole("button", { name: "完成" }));
+  expect(run).toHaveBeenCalledWith({ kind: "setCompletion", ids: ["t1", "t2"], completed: true });
+});
+
+test("bulk 删除 dispatches deleteTasks with every selected id", async () => {
+  const user = userEvent.setup();
+  const { run } = renderView({ workspace: scheduledWorkspace() });
+  await user.click(screen.getByRole("button", { name: "多选" }));
+  await user.click(screen.getByRole("checkbox", { name: "选择 写报告" }));
+  await user.click(screen.getByRole("checkbox", { name: "选择 开会" }));
+  await user.click(screen.getByRole("button", { name: "删除" }));
+  expect(run).toHaveBeenCalledWith({ kind: "deleteTasks", ids: ["t1", "t2"] });
+});
+
+test("移动分组 dispatches moveToGroup with the chosen project id", async () => {
+  const user = userEvent.setup();
+  const { run } = renderView({
+    workspace: workspace({
+      projects: [{ id: "p1", name: "工作", createdAt: now, updatedAt: now }],
+      tasks: [task("t1", { title: "写报告" }), task("t2", { title: "开会" })],
+      entries: [
+        { id: "e1", taskId: "t1", localDate: today, carriedFromDate: null },
+        { id: "e2", taskId: "t2", localDate: today, carriedFromDate: null },
+      ],
+    }),
+  });
+  await user.click(screen.getByRole("button", { name: "多选" }));
+  await user.click(screen.getByRole("checkbox", { name: "选择 写报告" }));
+  await user.click(screen.getByRole("checkbox", { name: "选择 开会" }));
+  await user.selectOptions(screen.getByLabelText("移动分组"), "p1");
+  expect(run).toHaveBeenCalledWith({ kind: "moveToGroup", ids: ["t1", "t2"], projectId: "p1" });
+});

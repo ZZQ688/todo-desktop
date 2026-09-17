@@ -22,7 +22,13 @@ interface Props {
   onAddChild: (task: Task) => void;
   onAddToToday?: (task: Task) => void;
   readOnly?: boolean;
+  selectable?: boolean;
+  selected?: ReadonlySet<string>;
+  onToggleSelected?: (id: string) => void;
 }
+
+const EMPTY_SELECTION: ReadonlySet<string> = new Set();
+const NOOP_TOGGLE = () => {};
 
 function describeRepeat(repeat: RepeatRule): string {
   const { freq, interval } = repeat;
@@ -61,15 +67,20 @@ function ConfirmDelete({ task, busy, error, onCancel, onConfirm }: {
   </div>;
 }
 
-function TaskRow({ task, children, contextual, projects, busy, run, onEdit, onAddChild, onAddToToday, onDelete, readOnly }: {
+function TaskRow({ task, children, contextual, projects, busy, run, onEdit, onAddChild, onAddToToday, onDelete, readOnly, selectable, selected, onToggleSelected }: {
   task: Task; children: Task[]; contextual?: boolean; projects: Project[]; busy: boolean;
   run: Props["run"]; onEdit: Props["onEdit"]; onAddChild: Props["onAddChild"];
   onAddToToday?: Props["onAddToToday"]; onDelete: (task: Task) => void; readOnly?: boolean;
+  selectable?: boolean; selected?: ReadonlySet<string>; onToggleSelected?: (id: string) => void;
 }) {
   const completedChildren = children.filter(({ status }) => status === "completed").length;
   const project = projects.find(({ id }) => id === task.projectId);
   return <div className={`task-row${contextual ? " task-row-context" : ""}`}>
     {contextual ? <span className="context-marker" aria-hidden="true" /> : readOnly ? <span aria-hidden="true" />
+      : selectable ? <input type="checkbox"
+        checked={selected?.has(task.id) ?? false} disabled={busy}
+        aria-label={`选择 ${task.title}`}
+        onChange={() => onToggleSelected?.(task.id)} />
       : <input type="checkbox"
         checked={task.status === "completed"} disabled={busy}
         aria-label={`${task.status === "completed" ? "重新打开" : "完成"} ${task.title}`}
@@ -103,7 +114,7 @@ function TaskRow({ task, children, contextual, projects, busy, run, onEdit, onAd
   </div>;
 }
 
-export function TaskList({ groups, tasks, projects, busy, error, run, onEdit, onAddChild, onAddToToday, readOnly }: Props) {
+export function TaskList({ groups, tasks, projects, busy, error, run, onEdit, onAddChild, onAddToToday, readOnly, selectable = false, selected = EMPTY_SELECTION, onToggleSelected = NOOP_TOGGLE }: Props) {
   const [deleting, setDeleting] = useState<Task | null>(null);
   if (groups.length === 0) return <p className="empty-state">这里还没有任务</p>;
   return <>
@@ -111,11 +122,13 @@ export function TaskList({ groups, tasks, projects, busy, error, run, onEdit, on
       {groups.map(({ parent, children, contextualParent }) => <li key={parent.id} data-task-id={parent.id} aria-label={parent.title}>
         <TaskRow task={parent} children={tasks.filter((task) => task.parentId === parent.id)}
           contextual={contextualParent} projects={projects}
-          busy={busy} run={run} onEdit={onEdit} onAddChild={onAddChild} onAddToToday={onAddToToday} onDelete={setDeleting} readOnly={readOnly} />
+          busy={busy} run={run} onEdit={onEdit} onAddChild={onAddChild} onAddToToday={onAddToToday} onDelete={setDeleting} readOnly={readOnly}
+          selectable={selectable} selected={selected} onToggleSelected={onToggleSelected} />
         {children.length > 0 && <ul className="subtask-list">
           {children.map((child) => <li key={child.id} data-task-id={child.id} aria-label={child.title}>
             <TaskRow task={child} children={[]} projects={projects} busy={busy} run={run}
-              onEdit={onEdit} onAddChild={onAddChild} onAddToToday={onAddToToday} onDelete={setDeleting} readOnly={readOnly} />
+              onEdit={onEdit} onAddChild={onAddChild} onAddToToday={onAddToToday} onDelete={setDeleting} readOnly={readOnly}
+              selectable={selectable} selected={selected} onToggleSelected={onToggleSelected} />
           </li>)}
         </ul>}
       </li>)}

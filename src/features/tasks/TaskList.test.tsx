@@ -118,3 +118,26 @@ test("delete confirm uses the batch deleteTasks mutation", async () => {
   await user.click(screen.getByRole("button", { name: "删除" }));
   expect(run).toHaveBeenCalledWith({ kind: "deleteTasks", ids: ["t1"] });
 });
+
+test("selectable rows render a selection checkbox that toggles without completing", async () => {
+  const user = userEvent.setup();
+  const run = vi.fn().mockResolvedValue(true);
+  const onToggleSelected = vi.fn();
+  const t = task("t1", { title: "写报告" });
+  render(<TaskList groups={[{ parent: t, children: [] }]} tasks={[t]} projects={[]}
+    busy={false} error={null} run={run} onEdit={vi.fn()} onAddChild={vi.fn()}
+    selectable selected={new Set()} onToggleSelected={onToggleSelected} />);
+  const checkbox = screen.getByRole("checkbox", { name: "选择 写报告" });
+  expect(checkbox).not.toBeChecked();
+  await user.click(checkbox);
+  expect(onToggleSelected).toHaveBeenCalledWith("t1");
+  expect(run).not.toHaveBeenCalled();
+});
+
+test("a selectable but readOnly row shows no checkbox", () => {
+  const t = task("t1", { title: "写报告" });
+  render(<TaskList groups={[{ parent: t, children: [] }]} tasks={[t]} projects={[]}
+    busy={false} error={null} run={vi.fn()} onEdit={vi.fn()} onAddChild={vi.fn()}
+    selectable selected={new Set()} onToggleSelected={vi.fn()} readOnly />);
+  expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+});

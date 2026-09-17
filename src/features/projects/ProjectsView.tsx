@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Folder, Pencil, Plus, Trash2 } from "lucide-react";
 import type { Mutation, Workspace } from "../../application/workspace";
 import type { Project, Task } from "../../domain/models";
+import { MultiSelectBar } from "../shared/MultiSelectBar";
 import { DeleteProjectDialog, ProjectDialog } from "../shared/ProjectDialogs";
 import { TaskEditor } from "../tasks/TaskEditor";
 import { TaskList, type TaskGroup } from "../tasks/TaskList";
@@ -24,7 +25,42 @@ export function ProjectsView({ workspace, busy, error, run }: Props) {
   const [editor, setEditor] = useState<EditorState>(null);
   const [projectEditor, setProjectEditor] = useState<Project | "new" | null>(null);
   const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectedProject = workspace.projects.find(({ id }) => id === selected);
+
+  function exitSelection() {
+    setSelecting(false);
+    setSelectedIds(new Set());
+  }
+
+  function toggleSelecting() {
+    setSelecting((selecting) => !selecting);
+    setSelectedIds(new Set());
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  useEffect(() => {
+    if (!selecting) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") exitSelection();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [selecting]);
+
+  async function bulk(mutation: Mutation) {
+    if (await run(mutation)) exitSelection();
+  }
+
+  const selectedArray = [...selectedIds];
 
   const groups = useMemo(() => {
     const inSelection = (task: Task) => selected === "all" ||
@@ -66,6 +102,7 @@ export function ProjectsView({ workspace, busy, error, run }: Props) {
             onChange={(event) => setStatus(event.target.value as typeof status)} aria-label="任务状态">
             <option value="all">全部状态</option><option value="open">未完成</option><option value="completed">已完成</option>
           </select></label>
+          <button aria-pressed={selecting} onClick={toggleSelecting}>多选</button>
           {selectedProject && <div className="project-actions">
             <button className="icon-button" aria-label={`重命名 ${selectedProject.name}`} title="重命名项目"
               onClick={() => setProjectEditor(selectedProject)}><Pencil aria-hidden="true" /></button>
@@ -74,8 +111,16 @@ export function ProjectsView({ workspace, busy, error, run }: Props) {
           </div>}
         </div>
         <TaskList groups={groups} tasks={workspace.tasks} projects={workspace.projects} busy={busy} error={error} run={run}
+          selectable={selecting} selected={selectedIds} onToggleSelected={toggleSelected}
           onEdit={(task) => setEditor({ task })} onAddChild={(parent) => setEditor({ parent })}
           onAddToToday={(task) => void run({ kind: "addToToday", ids: [task.id] })} />
+        {selecting && <MultiSelectBar count={selectedIds.size} busy={busy} projects={workspace.projects}
+          onComplete={() => void bulk({ kind: "setCompletion", ids: selectedArray, completed: true })}
+          onReopen={() => void bulk({ kind: "setCompletion", ids: selectedArray, completed: false })}
+          onDelete={() => void bulk({ kind: "deleteTasks", ids: selectedArray })}
+          onAddToToday={() => void bulk({ kind: "addToToday", ids: selectedArray })}
+          onMoveToGroup={(projectId) => void bulk({ kind: "moveToGroup", ids: selectedArray, projectId })}
+          onExit={exitSelection} />}
       </div>
     </div>
     {editor && <TaskEditor workspace={workspace} task={editor.task} parentId={editor.parent?.id}
