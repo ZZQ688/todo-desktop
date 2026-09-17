@@ -7,11 +7,17 @@ edition = "2021"
 name = "todo_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+default = ["tauri-runtime"]
+# Enables the Tauri shell (desktop app). Disabling it lets the pure-rusqlite
+# core (storage + workspace) compile and test on hosts without GTK/WebKit.
+tauri-runtime = ["dep:tauri", "dep:tauri-build"]
+
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2", features = [], optional = true }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = [], optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.37", features = ["bundled"] }

@@ -1,10 +1,14 @@
+#[cfg(feature = "tauri-runtime")]
 mod commands;
 pub mod storage;
 pub mod workspace;
 
+#[cfg(feature = "tauri-runtime")]
 use std::sync::Mutex;
+#[cfg(feature = "tauri-runtime")]
 use tauri::Manager;
 
+#[cfg(feature = "tauri-runtime")]
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
