@@ -17,7 +17,7 @@ This is the handover record for source revision
 | Screenshot inspection | Daily, project, and settings views inspected; no overlap or overflow found | PASS |
 | Rust formatting | Rust 1.98.1 in an isolated `/tmp` toolchain; real `cargo fmt --check` completed successfully | PASS |
 | Final source review | Review found Rust formatting and Today-at-midnight defects; both were fixed in `c51b42e` and independently re-reviewed | PASS |
-| GitHub delivery | Private repository `ZZQ688/todo-desktop`; local and remote `main` matched `c51b42e9119067da0a767a3d7b1e54c08f408f69` | PASS |
+| GitHub delivery | Private repository `ZZQ688/todo-desktop`; tested application `c51b42e` is on `main`, with final verification record at `9b1054d` | PASS |
 | Hosted checks | Checks run `35174591687`, completed successfully for `c51b42e` | PASS |
 | Windows installer | Windows Installer run `35174604276`, completed successfully; NSIS `.exe` downloaded and inspected | PASS |
 | Native desktop IPC | Requires a real Windows application launch and `health_check` round trip | PENDING MANUAL |
@@ -58,12 +58,14 @@ database retention after reopen, or native minimum-window behavior.
 The source is in the private repository
 [ZZQ688/todo-desktop](https://github.com/ZZQ688/todo-desktop). The new repository was
 created with `main` initially at `f89e361`, then fast-forwarded to the tested source
-revision. At delivery time, local `HEAD` and `refs/heads/main` on `origin` both resolved
-to:
+revision. The tested application revision is:
 
 ```text
 c51b42e9119067da0a767a3d7b1e54c08f408f69
 ```
+
+The final verification record is commit `9b1054d0ecec6bc74e475a8c285d6ba28d457d60`;
+local and remote `main` resolve to that documentation commit.
 
 The tracked-file audit found no database, credentials, original Word document,
 dependency directory, build output, or scratch files in the repository.
