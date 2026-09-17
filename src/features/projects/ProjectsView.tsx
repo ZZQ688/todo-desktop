@@ -1,9 +1,8 @@
-import { useMemo, useRef, useState, type FormEvent } from "react";
-import { Folder, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Folder, Pencil, Plus, Trash2 } from "lucide-react";
 import type { Mutation, Workspace } from "../../application/workspace";
 import type { Project, Task } from "../../domain/models";
-import { InlineMutationError } from "../shared/InlineMutationError";
-import { useModalFocus } from "../shared/useModalFocus";
+import { DeleteProjectDialog, ProjectDialog } from "../shared/ProjectDialogs";
 import { TaskEditor } from "../tasks/TaskEditor";
 import { TaskList, type TaskGroup } from "../tasks/TaskList";
 
@@ -17,62 +16,6 @@ type EditorState = { task?: Task; parent?: Task } | null;
 
 function isInstanceTask(task: Task): boolean {
   return task.recurrenceSourceId !== null;
-}
-
-function ProjectDialog({ project, busy, error, run, onClose }: {
-  project?: Project; busy: boolean; error: string | null; run: Props["run"]; onClose: () => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [name, setName] = useState(project?.name ?? "");
-  const [failed, setFailed] = useState(false);
-  const { modalRef, trapFocus } = useModalFocus(inputRef);
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setFailed(false);
-    if (!name.trim()) return;
-    const saved = await run({ kind: "saveProject", id: project?.id ?? crypto.randomUUID(), name: name.trim() });
-    if (saved) onClose();
-    else setFailed(true);
-  }
-  return <div className="modal-backdrop" role="presentation"><div ref={modalRef} className="modal confirm-modal" role="dialog"
-    aria-modal="true" aria-labelledby="project-editor-title"
-    onKeyDown={(event) => { trapFocus(event); if (event.key === "Escape" && !busy) onClose(); }}>
-    <div className="modal-heading"><h2 id="project-editor-title">{project ? "重命名项目" : "新建项目"}</h2>
-      <button className="icon-button" aria-label="关闭" title="关闭" onClick={onClose} disabled={busy}>
-        <X aria-hidden="true" /></button></div>
-    <InlineMutationError show={failed} error={error} />
-    <form onSubmit={submit}>
-      <fieldset className="form-fieldset editor-form" disabled={busy}>
-        <label className="field field-wide">项目名称<input ref={inputRef} aria-label="项目名称" value={name}
-          onChange={(event) => setName(event.target.value)} required maxLength={80} /></label>
-        <div className="form-actions field-wide"><button type="button" onClick={onClose}>取消</button>
-          <button className="primary-button" type="submit" disabled={!name.trim()}>保存</button></div>
-      </fieldset>
-    </form>
-  </div></div>;
-}
-
-function DeleteProjectDialog({ project, busy, error, run, onClose, onDeleted }: {
-  project: Project; busy: boolean; error: string | null; run: Props["run"];
-  onClose: () => void; onDeleted: () => void;
-}) {
-  const cancelRef = useRef<HTMLButtonElement>(null);
-  const [failed, setFailed] = useState(false);
-  const { modalRef, trapFocus } = useModalFocus(cancelRef);
-  async function removeProject() {
-    setFailed(false);
-    if (await run({ kind: "deleteProject", id: project.id })) onDeleted();
-    else setFailed(true);
-  }
-  return <div className="modal-backdrop" role="presentation"><div ref={modalRef} className="modal confirm-modal" role="alertdialog"
-    aria-modal="true" aria-labelledby="delete-project-title"
-    onKeyDown={(event) => { trapFocus(event); if (event.key === "Escape" && !busy) onClose(); }}>
-    <div className="modal-heading"><h2 id="delete-project-title">删除项目？</h2></div>
-    <p>项目“{project.name}”会被删除，里面的任务会保留到“未分组”。</p>
-    <InlineMutationError show={failed} error={error} />
-    <div className="form-actions"><button ref={cancelRef} onClick={onClose} disabled={busy}>取消</button>
-      <button className="danger-button" disabled={busy} onClick={() => void removeProject()}>删除项目</button></div>
-  </div></div>;
 }
 
 export function ProjectsView({ workspace, busy, error, run }: Props) {
@@ -112,7 +55,7 @@ export function ProjectsView({ workspace, busy, error, run }: Props) {
         <button className={selected === "none" ? "project-link selected" : "project-link"}
           onClick={() => setSelected("none")}><Folder aria-hidden="true" />未分组
           <span>{workspace.tasks.filter((task) => !task.parentId && !task.projectId && !isInstanceTask(task)).length}</span></button>
-        {workspace.projects.map((project) => <button key={project.id}
+        {workspace.projects.map((project) => <button key={project.id} data-project-id={project.id}
           className={selected === project.id ? "project-link selected" : "project-link"}
           onClick={() => setSelected(project.id)}><Folder aria-hidden="true" />{project.name}
           <span>{workspace.tasks.filter((task) => !task.parentId && task.projectId === project.id && !isInstanceTask(task)).length}</span></button>)}

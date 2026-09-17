@@ -5,6 +5,8 @@ import { localToday, type LocalDate } from "../domain/local-date";
 import { DailyView } from "../features/daily/DailyView";
 import { ProjectsView } from "../features/projects/ProjectsView";
 import { SettingsView } from "../features/settings/SettingsView";
+import { ContextMenu } from "../features/shared/ContextMenu";
+import { GlobalSearch, SearchResults } from "../features/shared/GlobalSearch";
 import { ModalActivityContext } from "../features/shared/ModalActivityContext";
 import { useWorkspace } from "./useWorkspace";
 
@@ -20,6 +22,7 @@ interface Props { repository?: WorkspaceRepository; today?: () => LocalDate }
 export function App({ repository, today = localToday }: Props) {
   const [view, setView] = useState<View>("daily");
   const [date, setDate] = useState(today);
+  const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const workspace = useWorkspace(repository, today);
 
@@ -49,6 +52,7 @@ export function App({ repository, today = localToday }: Props) {
     <div className={`app-shell density-${density}`} aria-busy={workspace.busy}>
     <aside className="navigation">
       <div className="brand">待办</div>
+      <GlobalSearch query={query} onQueryChange={setQuery} />
       <div className="view-tabs" role="tablist" aria-label="视图">
         {views.map(({ id, label, Icon }, index) => <button key={id} id={`tab-${id}`}
           role="tab" aria-selected={view === id} aria-controls={`panel-${id}`}
@@ -62,18 +66,22 @@ export function App({ repository, today = localToday }: Props) {
         <span>{workspace.error}</span><button onClick={() => void workspace.refresh()} disabled={workspace.busy}>重试</button>
       </div>}
       {!workspace.data ? <p className="loading-state" role="status">正在打开任务…</p> : <>
-        {view === "daily" && <section role="tabpanel" id="panel-daily" aria-labelledby="tab-daily" tabIndex={0}>
-          <DailyView workspace={workspace.data} date={date} today={today} onDateChange={changeDate}
-            busy={workspace.busy} error={workspace.error} run={workspace.run} />
-        </section>}
-        {view === "projects" && <section role="tabpanel" id="panel-projects" aria-labelledby="tab-projects" tabIndex={0}>
-          <ProjectsView workspace={workspace.data} busy={workspace.busy} error={workspace.error} run={workspace.run} />
-        </section>}
-        {view === "settings" && <section role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" tabIndex={0}>
-          <SettingsView workspace={workspace.data} busy={workspace.busy} run={workspace.run} today={today} />
-        </section>}
+        {query.trim() !== "" ? <SearchResults query={query} tasks={workspace.data.tasks} projects={workspace.data.projects} /> : <>
+          {view === "daily" && <section role="tabpanel" id="panel-daily" aria-labelledby="tab-daily" tabIndex={0}>
+            <DailyView workspace={workspace.data} date={date} today={today} onDateChange={changeDate}
+              busy={workspace.busy} error={workspace.error} run={workspace.run} />
+          </section>}
+          {view === "projects" && <section role="tabpanel" id="panel-projects" aria-labelledby="tab-projects" tabIndex={0}>
+            <ProjectsView workspace={workspace.data} busy={workspace.busy} error={workspace.error} run={workspace.run} />
+          </section>}
+          {view === "settings" && <section role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" tabIndex={0}>
+            <SettingsView workspace={workspace.data} busy={workspace.busy} run={workspace.run} today={today} />
+          </section>}
+        </>}
       </>}
     </main>
+    {workspace.data && <ContextMenu workspace={workspace.data} busy={workspace.busy} error={workspace.error}
+      run={workspace.run} view={view} />}
     </div>
   </ModalActivityContext.Provider>;
 }

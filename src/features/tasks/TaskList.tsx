@@ -108,12 +108,12 @@ export function TaskList({ groups, tasks, projects, busy, error, run, onEdit, on
   if (groups.length === 0) return <p className="empty-state">这里还没有任务</p>;
   return <>
     <ul className="task-list">
-      {groups.map(({ parent, children, contextualParent }) => <li key={parent.id} aria-label={parent.title}>
+      {groups.map(({ parent, children, contextualParent }) => <li key={parent.id} data-task-id={parent.id} aria-label={parent.title}>
         <TaskRow task={parent} children={tasks.filter((task) => task.parentId === parent.id)}
           contextual={contextualParent} projects={projects}
           busy={busy} run={run} onEdit={onEdit} onAddChild={onAddChild} onAddToToday={onAddToToday} onDelete={setDeleting} readOnly={readOnly} />
         {children.length > 0 && <ul className="subtask-list">
-          {children.map((child) => <li key={child.id} aria-label={child.title}>
+          {children.map((child) => <li key={child.id} data-task-id={child.id} aria-label={child.title}>
             <TaskRow task={child} children={[]} projects={projects} busy={busy} run={run}
               onEdit={onEdit} onAddChild={onAddChild} onAddToToday={onAddToToday} onDelete={setDeleting} readOnly={readOnly} />
           </li>)}

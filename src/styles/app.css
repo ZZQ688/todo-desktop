@@ -99,6 +99,40 @@ main { min-width: 0; width: 100%; max-width: 1120px; padding: 25px 30px 50px; }
 }
 .search-field svg { position: absolute; left: 9px; top: 10px; color: #727973; pointer-events: none; }
 .search-field input { padding-left: 33px; }
+.navigation .search-field { flex: 0 0 auto; margin: 0 0 12px; }
+.search-results { list-style: none; margin: 0; padding: 0; border-top: 1px solid #dfe3e0; }
+.search-results > li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 12px 4px; border-bottom: 1px solid #e2e6e3; }
+.search-result-title { font-weight: 550; overflow-wrap: anywhere; }
+.search-result-meta { color: #6d746f; font-size: 12px; }
+.context-menu {
+  position: fixed;
+  z-index: 40;
+  min-width: 180px;
+  max-width: 240px;
+  max-height: calc(100dvh - 12px);
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid #cbd2cd;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgb(20 30 24 / 18%);
+}
+.context-menu button {
+  width: 100%;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 7px 9px;
+  min-height: 32px;
+}
+.context-menu button:hover:not(:disabled) { background: #eef2ef; }
+.context-menu button.danger { color: #a03131; }
+.context-menu .context-submenu {
+  margin: 2px 4px 2px 12px;
+  padding-left: 8px;
+  border-left: 2px solid #d9e5dc;
+}
 .task-list, .subtask-list, .rule-list { list-style: none; margin: 0; padding: 0; }
 .task-list { border-top: 1px solid #dfe3e0; }
 .task-list > li, .subtask-list > li { border-bottom: 1px solid #e2e6e3; }
