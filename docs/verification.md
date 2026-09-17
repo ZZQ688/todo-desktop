@@ -1,5 +1,8 @@
 # Verification Record
 
+This file records the historical 0.1.0 scaffold. See
+[Version 0.2.0 verification](verification-0.2.0.md) for the functional todo application.
+
 Scope: first executable scaffold, not complete task-management workflows.
 
 This is the handover record for source revision
