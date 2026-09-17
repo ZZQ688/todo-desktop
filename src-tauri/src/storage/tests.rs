@@ -37,10 +37,8 @@ fn initializes_once_and_preserves_preferences_across_reopen() {
 #[test]
 fn failed_migration_rolls_back_and_preserves_existing_data() {
     let mut conn = Connection::open_in_memory().unwrap();
-    conn.execute_batch(
-        "CREATE TABLE tasks(id TEXT); INSERT INTO tasks VALUES ('preserve-me');",
-    )
-    .unwrap();
+    conn.execute_batch("CREATE TABLE tasks(id TEXT); INSERT INTO tasks VALUES ('preserve-me');")
+        .unwrap();
     assert!(initialize(&mut conn).is_err());
     let existing: String = conn
         .query_row("SELECT id FROM tasks", [], |r| r.get(0))

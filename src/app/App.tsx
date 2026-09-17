@@ -56,7 +56,7 @@ export function App({ today = localToday, getHealth = checkHealth }: {
           health.desktopRequired ? "未连接本地数据" : "本地数据无法打开。已有文件已保留。"}
       </p>
       <section role="tabpanel" id="panel-daily" aria-labelledby="tab-daily" tabIndex={0} hidden={view !== "daily"}>
-        <DailyView date={date} today={today()} onDateChange={setDate} />
+        <DailyView date={date} today={today} onDateChange={setDate} />
       </section>
       <section role="tabpanel" id="panel-projects" aria-labelledby="tab-projects" tabIndex={0} hidden={view !== "projects"}>
         <ProjectsView />

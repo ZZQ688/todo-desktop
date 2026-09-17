@@ -37,3 +37,16 @@ test("changes dates and preserves selection when switching views", async () => {
   await user.click(screen.getByRole("tab", { name: "设置" }));
   expect(screen.getByRole("heading", { name: "设置" })).toBeInTheDocument();
 });
+
+test("reads today's date when the Today button is clicked", async () => {
+  const user = userEvent.setup();
+  let currentDate = asLocalDate("2026-09-16");
+  render(<App today={() => currentDate} getHealth={ready} />);
+  await screen.findByText("本地数据已连接");
+
+  await user.click(screen.getByRole("button", { name: "下一天" }));
+  currentDate = asLocalDate("2026-09-17");
+  await user.click(screen.getByRole("button", { name: "今天" }));
+
+  expect(screen.getByLabelText("日期")).toHaveValue("2026-09-17");
+});

@@ -65,7 +65,9 @@ mod tests {
     fn reports_initialized_storage() {
         let mut connection = Connection::open_in_memory().unwrap();
         storage::initialize(&mut connection).unwrap();
-        let state = DatabaseState { connection: Mutex::new(Some(connection)) };
+        let state = DatabaseState {
+            connection: Mutex::new(Some(connection)),
+        };
         let report = read_health(&state).unwrap();
         assert_eq!(report.schema_version, 1);
         assert!(report.database_ready);
@@ -73,7 +75,9 @@ mod tests {
 
     #[test]
     fn failed_startup_does_not_report_ready() {
-        let state = DatabaseState { connection: Mutex::new(None) };
+        let state = DatabaseState {
+            connection: Mutex::new(None),
+        };
         let error = read_health(&state).unwrap_err();
         assert_eq!(error.code, "database_unavailable");
     }

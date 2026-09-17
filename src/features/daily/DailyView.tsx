@@ -3,7 +3,7 @@ import { addDays, asLocalDate, type LocalDate } from "../../domain/local-date";
 
 interface Props {
   date: LocalDate;
-  today: LocalDate;
+  today: () => LocalDate;
   onDateChange: (date: LocalDate) => void;
 }
 
@@ -21,7 +21,7 @@ export function DailyView({ date, today, onDateChange }: Props) {
         }} />
       <button aria-label="下一天" title="下一天" disabled={date === "9999-12-31"}
         onClick={() => onDateChange(addDays(date, 1))}><ArrowRight aria-hidden="true" /></button>
-      <button onClick={() => onDateChange(today)}><CalendarDays aria-hidden="true" />今天</button>
+      <button onClick={() => onDateChange(today())}><CalendarDays aria-hidden="true" />今天</button>
     </div>
     <p className="empty-state">未加载任务</p>
   </>;

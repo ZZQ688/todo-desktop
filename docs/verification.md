@@ -4,10 +4,12 @@ Scope: first executable scaffold, not complete task-management workflows.
 
 | Check | Required evidence | Status |
 | --- | --- | --- |
-| Frontend unit tests and type check | `npm test` (9 tests), `npm run typecheck`; Node v24.16.0; source `8aca8ee` plus Task 6 changes | PASS |
+| Frontend unit tests and type check | `npm test` (10 tests), including 4 App tests; Node v24.16.0 | PASS |
 | Frontend build | `npm run build` exit 0; generated `dist/` assets | PASS |
 | Local-date timezone behavior | Asia/Shanghai and America/New_York targeted tests, 3 tests each | PASS |
+| Today button date freshness | Date provider changed while App remained mounted; click selected the updated date | PASS |
 | Browser navigation and layout | `npm run test:e2e` with desktop and narrow projects; 2 passed | PASS |
+| Rust formatting | Isolated toolchain `cargo fmt --manifest-path src-tauri/Cargo.toml --check` exit 0 | PASS |
 | Native database and health tests | Windows Cargo output, Rust version, tested source revision | Pending Windows runner |
 | Actual desktop IPC | Native window shows connected local data after health_check | Not run |
 | Offline startup and reopen | Installed Windows app starts offline, same database retained | Not run |
@@ -27,7 +29,9 @@ The local environment has Node.js 24 and npm 11.17.0. Native GUI dependencies fo
 are unavailable, so no local Windows or desktop-native result is claimed.
 
 `npm ci` passed with the strict npm 11.17 install-script policy after recording pinned
-approvals for `esbuild@0.28.2` and `fsevents@2.3.3`. Local `cargo fmt --check` could not
-run because the supplied isolated Rust toolchain has no rustfmt component; the affected
-Rust sources were formatted to the stable rustfmt layout manually. Windows Cargo tests,
-clippy, native IPC, offline reopen, packaging, and GitHub delivery remain unverified here.
+approvals for `esbuild@0.28.2` and `fsevents@2.3.3`. The Today-button regression was
+observed failing with the stale `2026-09-16` render-time value, then passing with the
+click-time `2026-09-17` value; the complete frontend suite passes 10 tests. The isolated
+Rust toolchain now includes rustfmt, and `cargo fmt --check` passes after formatting the
+affected Rust sources. Windows Cargo tests, clippy, native IPC, offline reopen, packaging,
+and GitHub delivery remain unverified here.
