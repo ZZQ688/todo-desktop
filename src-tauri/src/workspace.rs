@@ -341,22 +341,18 @@ fn save_task(
                 "任务不能成为自己的父任务".into(),
             ));
         }
-        if !subtasks.is_empty() {
-            return Err(WorkspaceError::InvalidInput("子任务不能再有子任务".into()));
-        }
-        let parent: Option<(Option<String>, Option<String>)> = tx
+        // The parent's own project_id (nullable). A missing parent row is an error,
+        // but a parent with no project is fine — the child inherits `None`.
+        let row: Option<Option<String>> = tx
             .query_row(
-                "SELECT parent_id,project_id FROM tasks WHERE id=?1",
+                "SELECT project_id FROM tasks WHERE id=?1",
                 [parent_id],
-                |row| Ok((row.get(0)?, row.get(1)?)),
+                |row| row.get(0),
             )
             .optional()?;
-        let Some((parent_parent, parent_project)) = parent else {
+        let Some(parent_project) = row else {
             return Err(WorkspaceError::MissingTask(parent_id.clone()));
         };
-        if parent_parent.is_some() {
-            return Err(WorkspaceError::InvalidInput("只支持一层子任务".into()));
-        }
         Some(parent_project)
     } else {
         None
@@ -397,7 +393,7 @@ fn save_task(
         ],
     )?;
 
-    if draft.parent_id.is_none() {
+    {
         let parent_priority = priority_string(&draft.priority);
         let mut keep: Vec<String> = Vec::new();
         for sub in &subtasks {
@@ -455,56 +451,140 @@ fn set_completion(
     if ids.is_empty() {
         return Ok(());
     }
-    let status = if completed { "completed" } else { "open" };
     let timestamp = now(tx)?;
+
+    // Load the parent/status graph so the cascade can be computed for any depth.
+    // Generated instances always have parent_id NULL (and are never children), so
+    // the parent_id tree only connects real tasks; instance completion stays
+    // independent of its series, matching the pre-existing semantics.
+    let rows: Vec<(String, Option<String>, String)> = {
+        let mut stmt = tx.prepare("SELECT id,parent_id,status FROM tasks")?;
+        let mapped = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?;
+        mapped.collect::<Result<Vec<_>, _>>()?
+    };
+    let exists = |id: &str| rows.iter().any(|(task_id, _, _)| task_id == id);
     for id in &ids {
-        if tx
-            .query_row("SELECT 1 FROM tasks WHERE id=?1", [id], |_| Ok(()))
-            .optional()?
-            .is_none()
-        {
+        if !exists(id) {
             return Err(WorkspaceError::MissingTask(id.clone()));
         }
-        tx.execute(
-            "UPDATE tasks SET status=?2,completed_at=?3,updated_at=?4 WHERE id=?1",
-            params![
-                id,
-                status,
-                if completed {
-                    Some(timestamp.clone())
-                } else {
-                    None::<String>
-                },
-                timestamp
-            ],
-        )?;
-        tx.execute(
-            "UPDATE tasks SET status=?2,completed_at=?3,updated_at=?4 WHERE parent_id=?1",
-            params![
-                id,
-                status,
-                if completed {
-                    Some(timestamp.clone())
-                } else {
-                    None::<String>
-                },
-                timestamp
-            ],
-        )?;
     }
 
+    // `final_completed` tracks each task's target status after the cascade.
+    let mut final_completed: HashSet<String> = rows
+        .iter()
+        .filter(|(_, _, status)| status == "completed")
+        .map(|(id, _, _)| id.clone())
+        .collect();
+    let targets: HashSet<String> = ids.iter().cloned().collect();
+
     if completed {
-        tx.execute(
-            "UPDATE tasks SET status='completed',completed_at=?1,updated_at=?1 WHERE recurrence_source_id IS NULL AND id IN (SELECT parent_id FROM tasks WHERE parent_id IS NOT NULL AND recurrence_source_id IS NULL) AND NOT EXISTS (SELECT 1 FROM tasks c WHERE c.parent_id=tasks.id AND c.status<>'completed')",
-            [&timestamp],
-        )?;
+        // Complete the targets and all their descendants, then walk upward:
+        // any parent whose children are all complete becomes complete itself.
+        let mut affected = descendants(&rows, &targets);
+        for id in affected.drain() {
+            final_completed.insert(id);
+        }
+        loop {
+            let mut changed = false;
+            for (parent_id, _, _) in &rows {
+                if final_completed.contains(parent_id) {
+                    continue;
+                }
+                let children: Vec<&str> = rows
+                    .iter()
+                    .filter(|(_, parent, _)| parent.as_deref() == Some(parent_id.as_str()))
+                    .map(|(id, _, _)| id.as_str())
+                    .collect();
+                if !children.is_empty()
+                    && children
+                        .iter()
+                        .all(|child| final_completed.contains(*child))
+                {
+                    final_completed.insert(parent_id.clone());
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
     } else {
-        tx.execute(
-            "UPDATE tasks SET status='open',completed_at=NULL,updated_at=?1 WHERE recurrence_source_id IS NULL AND id IN (SELECT parent_id FROM tasks WHERE parent_id IS NOT NULL AND recurrence_source_id IS NULL) AND EXISTS (SELECT 1 FROM tasks c WHERE c.parent_id=tasks.id AND c.status<>'completed')",
-            [&timestamp],
-        )?;
+        // Reopen the targets, their descendants, and every ancestor (an open child
+        // reopens its parent, which reopens its parent, and so on).
+        let mut affected = descendants(&rows, &targets);
+        affected.extend(ancestors(&rows, &targets));
+        for id in affected {
+            final_completed.remove(&id);
+        }
+    }
+
+    for (id, _, current_status) in &rows {
+        let target_status = if final_completed.contains(id) {
+            "completed"
+        } else {
+            "open"
+        };
+        if target_status != current_status {
+            let completed_at = final_completed.contains(id).then(|| timestamp.clone());
+            tx.execute(
+                "UPDATE tasks SET status=?2,completed_at=?3,updated_at=?4 WHERE id=?1",
+                params![id, target_status, completed_at, timestamp],
+            )?;
+        }
     }
     Ok(())
+}
+
+/// Returns `roots` plus every descendant in the `parent_id` tree.
+fn descendants(
+    rows: &[(String, Option<String>, String)],
+    roots: &HashSet<String>,
+) -> HashSet<String> {
+    let mut out = roots.clone();
+    loop {
+        let mut changed = false;
+        for (id, parent_id, _) in rows {
+            if let Some(parent) = parent_id {
+                if out.contains(parent) && !out.contains(id) {
+                    out.insert(id.clone());
+                    changed = true;
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    out
+}
+
+/// Returns every ancestor of `starts`, including the starts themselves.
+fn ancestors(
+    rows: &[(String, Option<String>, String)],
+    starts: &HashSet<String>,
+) -> HashSet<String> {
+    let mut out = starts.clone();
+    loop {
+        let mut changed = false;
+        for (id, parent_id, _) in rows {
+            if let Some(parent) = parent_id {
+                if out.contains(id) && !out.contains(parent) {
+                    out.insert(parent.clone());
+                    changed = true;
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    out
 }
 
 fn delete_tasks(tx: &Transaction<'_>, ids: Vec<String>) -> Result<(), WorkspaceError> {
@@ -588,23 +668,34 @@ fn move_to_group(
         }
     }
     let timestamp = now(tx)?;
+    let rows: Vec<(String, Option<String>, String)> = {
+        let mut stmt = tx.prepare("SELECT id,parent_id,status FROM tasks")?;
+        let mapped = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?;
+        mapped.collect::<Result<Vec<_>, _>>()?
+    };
+    // Only top-level tasks are moved; their descendants follow. A subtask passed
+    // directly inherits its parent's group, so it is left untouched.
+    let mut roots: HashSet<String> = HashSet::new();
     for id in &ids {
-        let parent_id: Option<String> = tx
-            .query_row("SELECT parent_id FROM tasks WHERE id=?1", [id], |row| {
-                row.get(0)
-            })
-            .optional()?
-            .ok_or_else(|| WorkspaceError::MissingTask(id.clone()))?;
-        if parent_id.is_none() {
-            tx.execute(
-                "UPDATE tasks SET project_id=?2,updated_at=?3 WHERE id=?1",
-                params![id, project_id, timestamp],
-            )?;
-            tx.execute(
-                "UPDATE tasks SET project_id=?2,updated_at=?3 WHERE parent_id=?1",
-                params![id, project_id, timestamp],
-            )?;
+        match rows.iter().find(|(task_id, _, _)| task_id == id) {
+            None => return Err(WorkspaceError::MissingTask(id.clone())),
+            Some((_, Some(_), _)) => {}
+            Some((task_id, None, _)) => {
+                roots.insert(task_id.clone());
+            }
         }
+    }
+    for id in descendants(&rows, &roots) {
+        tx.execute(
+            "UPDATE tasks SET project_id=?2,updated_at=?3 WHERE id=?1",
+            params![id, project_id, timestamp],
+        )?;
     }
     Ok(())
 }

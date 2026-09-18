@@ -3,7 +3,7 @@ use std::path::Path;
 use rusqlite::Connection;
 use thiserror::Error;
 
-pub const SCHEMA_VERSION: i64 = 3;
+pub const SCHEMA_VERSION: i64 = 4;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -30,6 +30,7 @@ pub fn initialize(connection: &mut Connection) -> Result<(), StorageError> {
             transaction.execute_batch(include_str!("../migrations/001_initial.sql"))?;
             transaction.execute_batch(include_str!("../migrations/002_recurrence_cursor.sql"))?;
             transaction.execute_batch(include_str!("../migrations/003_redesign.sql"))?;
+            transaction.execute_batch(include_str!("../migrations/004_nested_subtasks.sql"))?;
             crate::workspace::migrate_recurrence_rules(&transaction)?;
             transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
             validate_schema(&transaction)?;
@@ -39,6 +40,7 @@ pub fn initialize(connection: &mut Connection) -> Result<(), StorageError> {
             let transaction = connection.transaction()?;
             transaction.execute_batch(include_str!("../migrations/002_recurrence_cursor.sql"))?;
             transaction.execute_batch(include_str!("../migrations/003_redesign.sql"))?;
+            transaction.execute_batch(include_str!("../migrations/004_nested_subtasks.sql"))?;
             crate::workspace::migrate_recurrence_rules(&transaction)?;
             transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
             validate_schema(&transaction)?;
@@ -47,7 +49,15 @@ pub fn initialize(connection: &mut Connection) -> Result<(), StorageError> {
         2 => {
             let transaction = connection.transaction()?;
             transaction.execute_batch(include_str!("../migrations/003_redesign.sql"))?;
+            transaction.execute_batch(include_str!("../migrations/004_nested_subtasks.sql"))?;
             crate::workspace::migrate_recurrence_rules(&transaction)?;
+            transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+            validate_schema(&transaction)?;
+            transaction.commit()?;
+        }
+        3 => {
+            let transaction = connection.transaction()?;
+            transaction.execute_batch(include_str!("../migrations/004_nested_subtasks.sql"))?;
             transaction.pragma_update(None, "user_version", SCHEMA_VERSION)?;
             validate_schema(&transaction)?;
             transaction.commit()?;

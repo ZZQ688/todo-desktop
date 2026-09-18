@@ -20,6 +20,28 @@ test("a task with a subtask appears today and completing the parent cascades to 
   await page.screenshot({ path: testInfo.outputPath("daily-cascade.png"), fullPage: true });
 });
 
+test("a subtask can have its own subtask (nested)", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "添加任务", exact: true }).click();
+  const editor = page.getByRole("dialog");
+  await editor.getByLabel("任务名称", { exact: true }).fill("季度复盘");
+  await editor.getByRole("button", { name: "添加子任务", exact: true }).click();
+  await editor.getByLabel("子任务", { exact: true }).fill("整理指标");
+  await editor.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(editor).toBeHidden();
+
+  await page.getByRole("button", { name: "添加 整理指标 的子任务", exact: true }).click();
+  const subEditor = page.getByRole("dialog");
+  await subEditor.getByLabel("任务名称", { exact: true }).fill("核对数据");
+  await subEditor.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(subEditor).toBeHidden();
+
+  await expect(page.getByRole("checkbox", { name: "完成 核对数据", exact: true })).toBeVisible();
+  // Completing the grandparent cascades all the way down.
+  await page.getByRole("checkbox", { name: "完成 季度复盘", exact: true }).check();
+  await expect(page.getByRole("checkbox", { name: "重新打开 核对数据", exact: true })).toBeChecked();
+});
+
 test("a recurring task materializes today's instance with a repeat badge", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "添加任务", exact: true }).click();

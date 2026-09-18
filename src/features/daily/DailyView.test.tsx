@@ -93,6 +93,26 @@ function scheduledWorkspace(): Workspace {
   });
 }
 
+test("renders a scheduled grandchild nested under its parent and grandparent", () => {
+  renderView({
+    workspace: workspace({
+      tasks: [
+        task("root", { title: "季度复盘" }),
+        task("child", { title: "整理指标", parentId: "root" }),
+        task("grand", { title: "核对数据", parentId: "child" }),
+      ],
+      entries: [
+        { id: "e1", taskId: "root", localDate: today, carriedFromDate: null },
+        { id: "e2", taskId: "child", localDate: today, carriedFromDate: null },
+        { id: "e3", taskId: "grand", localDate: today, carriedFromDate: null },
+      ],
+    }),
+  });
+  expect(screen.getByText("季度复盘")).toBeInTheDocument();
+  expect(screen.getByText("整理指标")).toBeInTheDocument();
+  expect(screen.getByText("核对数据")).toBeInTheDocument();
+});
+
 test("hides the 多选 toggle on a read-only past date", () => {
   renderView({ date: past, workspace: workspace({
     tasks: [task("t1", { title: "写报告" })],

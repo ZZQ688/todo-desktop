@@ -162,9 +162,7 @@ function saveTask(
   let parentProject: string | null = null;
   if (draft.parentId) {
     if (draft.parentId === draft.id) throw new Error("任务不能成为自己的父任务");
-    if (subtasks.length) throw new Error("子任务不能再有子任务");
     const parent = taskById(state, draft.parentId);
-    if (parent.parentId) throw new Error("只支持一层子任务");
     inheritProject = true;
     parentProject = parent.projectId;
   }
@@ -195,7 +193,7 @@ function saveTask(
   }
 
   // Children inherit the parent's project and priority; removed children are deleted.
-  if (draft.parentId === null) {
+  {
     const keep: string[] = [];
     for (const sub of subtasks) {
       validateId(sub.id, "子任务 ID");
@@ -234,32 +232,76 @@ function saveTask(
 function setCompletion(state: Workspace, ids: string[], completed: boolean, now: string) {
   if (ids.length === 0) return;
   for (const id of ids) taskById(state, id);
-  // 1. Update each id itself and its direct children.
+
+  // finalCompleted tracks each task's target status after the cascade. The
+  // parent_id tree only connects real tasks (instances always have parentId null),
+  // so instance completion stays independent of its series.
+  const finalCompleted = new Set<string>(
+    state.tasks.filter((task) => task.status === "completed").map((task) => task.id),
+  );
+  const targets = new Set(ids);
+
+  if (completed) {
+    // Complete the targets and all descendants, then walk upward: any parent
+    // whose children are all complete becomes complete.
+    for (const id of descendants(state, targets)) finalCompleted.add(id);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const parent of state.tasks) {
+        if (finalCompleted.has(parent.id)) continue;
+        const children = state.tasks.filter((child) => child.parentId === parent.id);
+        if (children.length > 0 && children.every((child) => finalCompleted.has(child.id))) {
+          finalCompleted.add(parent.id);
+          changed = true;
+        }
+      }
+    }
+  } else {
+    // Reopen the targets, their descendants, and every ancestor.
+    const affected = descendants(state, targets);
+    for (const id of ancestors(state, targets)) affected.add(id);
+    for (const id of affected) finalCompleted.delete(id);
+  }
+
   for (const task of state.tasks) {
-    if (ids.includes(task.id) || (task.parentId && ids.includes(task.parentId))) {
-      task.status = completed ? "completed" : "open";
-      task.completedAt = completed ? now : null;
+    const targetStatus = finalCompleted.has(task.id) ? "completed" : "open";
+    if (task.status !== targetStatus) {
+      task.status = targetStatus;
+      task.completedAt = targetStatus === "completed" ? now : null;
       task.updatedAt = now;
     }
   }
-  // 2. Cascade across the parent/child boundary (instances never participate).
-  for (const parent of state.tasks) {
-    if (parent.recurrenceSourceId !== null) continue;
-    const children = state.tasks.filter((child) =>
-      child.parentId === parent.id && child.recurrenceSourceId === null);
-    if (children.length === 0) continue;
-    const allCompleted = children.every((child) => child.status === "completed");
-    const anyOpen = children.some((child) => child.status === "open");
-    if (completed && allCompleted) {
-      parent.status = "completed";
-      parent.completedAt = now;
-      parent.updatedAt = now;
-    } else if (!completed && anyOpen) {
-      parent.status = "open";
-      parent.completedAt = null;
-      parent.updatedAt = now;
+}
+
+function descendants(state: Workspace, roots: Set<string>): Set<string> {
+  const out = new Set(roots);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const task of state.tasks) {
+      if (task.parentId && out.has(task.parentId) && !out.has(task.id)) {
+        out.add(task.id);
+        changed = true;
+      }
     }
   }
+  return out;
+}
+
+function ancestors(state: Workspace, starts: Set<string>): Set<string> {
+  const out = new Set(starts);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const task of state.tasks) {
+      if (task.parentId && out.has(task.id) && !out.has(task.parentId)) {
+        out.add(task.parentId);
+        changed = true;
+      }
+    }
+  }
+  return out;
 }
 
 function deleteTasks(state: Workspace, ids: string[], occurrences: OccurrenceIndex) {
@@ -304,17 +346,18 @@ function moveToGroup(state: Workspace, ids: string[], projectId: string | null, 
   if (projectId && !state.projects.some((project) => project.id === projectId)) {
     throw new Error("项目不存在");
   }
+  // Only top-level tasks are moved; their descendants follow. A subtask passed
+  // directly inherits its parent's group, so it is left untouched.
+  const roots = new Set<string>();
   for (const id of ids) {
     const task = taskById(state, id);
-    if (task.parentId === null) {
+    if (task.parentId === null) roots.add(id);
+  }
+  for (const id of descendants(state, roots)) {
+    const task = state.tasks.find((item) => item.id === id);
+    if (task) {
       task.projectId = projectId;
       task.updatedAt = now;
-      for (const child of state.tasks) {
-        if (child.parentId === id) {
-          child.projectId = projectId;
-          child.updatedAt = now;
-        }
-      }
     }
   }
 }

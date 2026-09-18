@@ -65,28 +65,37 @@ export function DailyView({ workspace, date, today, onDateChange, busy, error, r
   const groups = useMemo(() => {
     const scheduled = new Set(workspace.entries.filter((entry) => entry.localDate === date)
       .map((entry) => entry.taskId));
-    const roots = workspace.tasks.filter((task) => task.parentId === null);
-    const result: TaskGroup[] = [];
-    for (const parent of roots) {
-      const allChildren = workspace.tasks.filter((task) => task.parentId === parent.id);
+    const build = (parent: Task): TaskGroup | null => {
       const parentScheduled = scheduled.has(parent.id);
-      const children = allChildren.filter((child) => scheduled.has(child.id));
-      if (!parentScheduled && children.length === 0) continue;
-      result.push({ parent, children, contextualParent: !parentScheduled });
-    }
+      const children = workspace.tasks
+        .filter((task) => task.parentId === parent.id)
+        .map((child) => build(child))
+        .filter((group): group is TaskGroup => group !== null);
+      if (parentScheduled) return { parent, children };
+      if (children.length) return { parent, children, contextualParent: true };
+      return null;
+    };
+    const result: TaskGroup[] = workspace.tasks
+      .filter((task) => task.parentId === null)
+      .map((root) => build(root))
+      .filter((group): group is TaskGroup => group !== null);
+    // Scheduled tasks whose parent no longer exists show as standalone roots.
     for (const task of workspace.tasks) {
       if (task.parentId && scheduled.has(task.id) && !workspace.tasks.some(({ id }) => id === task.parentId)) {
         result.push({ parent: task, children: [] });
       }
     }
-    return result.flatMap((group) => {
-      const children = group.children.filter((child) => status === "all" || child.status === status);
+    const applyStatus = (group: TaskGroup): TaskGroup | null => {
+      const children = group.children
+        .map((child) => applyStatus(child))
+        .filter((child): child is TaskGroup => child !== null);
+      if (group.contextualParent) return children.length ? { ...group, children } : null;
       const parentMatchesStatus = status === "all" || group.parent.status === status;
-      if (group.contextualParent) return children.length ? [{ ...group, children }] : [];
-      if (parentMatchesStatus) return [{ ...group, children }];
-      if (children.length) return [{ ...group, children, contextualParent: true }];
-      return [];
-    });
+      if (parentMatchesStatus) return { ...group, children };
+      if (children.length) return { ...group, children, contextualParent: true };
+      return null;
+    };
+    return result.map((group) => applyStatus(group)).filter((group): group is TaskGroup => group !== null);
   }, [date, status, workspace]);
 
   return <>

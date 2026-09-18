@@ -118,7 +118,7 @@ export function TaskEditor({ workspace, task, parentId = null, initialProjectId 
               {workspace.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
           </label>
-          {!isSubtask && <fieldset className="subtasks-field field-wide">
+          <fieldset className="subtasks-field field-wide">
             <legend>子任务</legend>
             <ul className="subtask-edit-list">
               {subtasks.map((subtask) => (
@@ -131,7 +131,7 @@ export function TaskEditor({ workspace, task, parentId = null, initialProjectId 
               ))}
             </ul>
             <button type="button" onClick={addSubtask}><Plus aria-hidden="true" />添加子任务</button>
-          </fieldset>}
+          </fieldset>
           <label className="field">重复
             <select aria-label="重复" value={repeat?.freq ?? ""}
               onChange={(event) => {

@@ -428,6 +428,125 @@ fn completing_an_instance_does_not_touch_its_source_or_real_children() {
 }
 
 #[test]
+fn completing_a_root_completes_deep_descendants() {
+    let mut connection = memory_database();
+    mutate_workspace(
+        &mut connection,
+        task_with_subtasks("root", "Root", &["a"], true),
+        "2026-09-17",
+    )
+    .unwrap();
+    mutate_workspace(
+        &mut connection,
+        task("b", "B", None, Some("a"), None, true),
+        "2026-09-17",
+    )
+    .unwrap();
+    mutate_workspace(
+        &mut connection,
+        Mutation::SetCompletion {
+            ids: vec!["root".into()],
+            completed: true,
+        },
+        "2026-09-17",
+    )
+    .unwrap();
+    let loaded = load_workspace(&connection).unwrap();
+    assert_eq!(task_status(&loaded, "root"), TaskStatus::Completed);
+    assert_eq!(task_status(&loaded, "a"), TaskStatus::Completed);
+    assert_eq!(task_status(&loaded, "b"), TaskStatus::Completed);
+}
+
+#[test]
+fn completing_last_leaf_completes_all_ancestors() {
+    let mut connection = memory_database();
+    mutate_workspace(
+        &mut connection,
+        task_with_subtasks("root", "Root", &["a"], true),
+        "2026-09-17",
+    )
+    .unwrap();
+    mutate_workspace(
+        &mut connection,
+        task("b", "B", None, Some("a"), None, true),
+        "2026-09-17",
+    )
+    .unwrap();
+    mutate_workspace(
+        &mut connection,
+        task("c", "C", None, Some("a"), None, true),
+        "2026-09-17",
+    )
+    .unwrap();
+
+    mutate_workspace(
+        &mut connection,
+        Mutation::SetCompletion {
+            ids: vec!["b".into()],
+            completed: true,
+        },
+        "2026-09-17",
+    )
+    .unwrap();
+    let loaded = load_workspace(&connection).unwrap();
+    assert_eq!(task_status(&loaded, "b"), TaskStatus::Completed);
+    assert_eq!(task_status(&loaded, "a"), TaskStatus::Open);
+    assert_eq!(task_status(&loaded, "root"), TaskStatus::Open);
+
+    mutate_workspace(
+        &mut connection,
+        Mutation::SetCompletion {
+            ids: vec!["c".into()],
+            completed: true,
+        },
+        "2026-09-17",
+    )
+    .unwrap();
+    let loaded = load_workspace(&connection).unwrap();
+    assert_eq!(task_status(&loaded, "a"), TaskStatus::Completed);
+    assert_eq!(task_status(&loaded, "root"), TaskStatus::Completed);
+}
+
+#[test]
+fn reopening_a_leaf_reopens_its_ancestors() {
+    let mut connection = memory_database();
+    mutate_workspace(
+        &mut connection,
+        task_with_subtasks("root", "Root", &["a"], true),
+        "2026-09-17",
+    )
+    .unwrap();
+    mutate_workspace(
+        &mut connection,
+        task("b", "B", None, Some("a"), None, true),
+        "2026-09-17",
+    )
+    .unwrap();
+    mutate_workspace(
+        &mut connection,
+        Mutation::SetCompletion {
+            ids: vec!["root".into()],
+            completed: true,
+        },
+        "2026-09-17",
+    )
+    .unwrap();
+    mutate_workspace(
+        &mut connection,
+        Mutation::SetCompletion {
+            ids: vec!["b".into()],
+            completed: false,
+        },
+        "2026-09-17",
+    )
+    .unwrap();
+    let loaded = load_workspace(&connection).unwrap();
+    assert_eq!(task_status(&loaded, "b"), TaskStatus::Open);
+    assert_eq!(task_status(&loaded, "a"), TaskStatus::Open);
+    assert_eq!(task_status(&loaded, "root"), TaskStatus::Open);
+}
+
+#[test]
 fn add_to_today_is_idempotent() {
     let mut connection = memory_database();
     mutate_workspace(
@@ -1126,13 +1245,13 @@ fn validation_and_failed_mutations_are_atomic() {
     )
     .unwrap();
 
-    // Deep nesting is rejected: child already has a parent.
-    assert!(mutate_workspace(
+    // Deep nesting is now allowed: a subtask may sit under another subtask.
+    mutate_workspace(
         &mut connection,
         task("deep", "Deep", None, Some("child"), None, true),
-        "2026-09-17"
+        "2026-09-17",
     )
-    .is_err());
+    .unwrap();
     // A task cannot be its own parent.
     assert!(mutate_workspace(
         &mut connection,
@@ -1140,15 +1259,15 @@ fn validation_and_failed_mutations_are_atomic() {
         "2026-09-17"
     )
     .is_err());
-    // A subtask cannot carry subtasks of its own.
-    assert!(mutate_workspace(
+    // A subtask may carry subtasks of its own.
+    mutate_workspace(
         &mut connection,
         Mutation::SaveTask {
             task: TaskDraft {
-                id: "child".into(),
-                title: "Child".into(),
+                id: "deep".into(),
+                title: "Deep".into(),
                 project_id: None,
-                parent_id: Some("parent".into()),
+                parent_id: Some("child".into()),
                 priority: Priority::Normal,
                 due_date: None,
                 repeat: None,
@@ -1159,9 +1278,9 @@ fn validation_and_failed_mutations_are_atomic() {
             }],
             schedule_today: true,
         },
-        "2026-09-17"
+        "2026-09-17",
     )
-    .is_err());
+    .unwrap();
     // Bad date and bad project are rejected.
     assert!(mutate_workspace(
         &mut connection,
@@ -1211,7 +1330,7 @@ fn validation_and_failed_mutations_are_atomic() {
     )
     .is_err());
 
-    assert_eq!(load_workspace(&connection).unwrap().tasks.len(), 2);
+    assert_eq!(load_workspace(&connection).unwrap().tasks.len(), 4);
 }
 
 #[test]

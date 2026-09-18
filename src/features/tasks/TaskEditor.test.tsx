@@ -117,9 +117,9 @@ test("saves repeat null when 无 is selected", async () => {
   expect(run.mock.calls[0][0].task.repeat).toBeNull();
 });
 
-test("hides subtasks and disables the group selector when editing a subtask", () => {
+test("disables the group selector but still allows subtasks when editing a subtask", () => {
   renderEditor({ parentId: "parent" });
-  expect(screen.queryByRole("button", { name: "添加子任务" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "添加子任务" })).toBeInTheDocument();
   expect(screen.getByLabelText("分组")).toBeDisabled();
 });
 

@@ -193,7 +193,7 @@ export function ContextMenu({ workspace, busy, error, run, view, today }: Props)
         {taskInToday
           ? <button role="menuitem" onClick={() => removeFromToday(taskTarget)}>移出今日</button>
           : <button role="menuitem" onClick={() => addToToday(taskTarget)}>加入今日</button>}
-        {!taskTarget.parentId && <button role="menuitem" onClick={() => addChild(taskTarget)}>添加子任务</button>}
+        <button role="menuitem" onClick={() => addChild(taskTarget)}>添加子任务</button>
         <button role="menuitem" onClick={() => setMenu((prev) => prev && { ...prev, submenuOpen: !prev.submenuOpen })}>移动分组</button>
         {menu.submenuOpen && <div className="context-submenu" role="group" aria-label="移动到分组">
           <button role="menuitem" onClick={() => moveToGroup(taskTarget, null)}>未分组</button>

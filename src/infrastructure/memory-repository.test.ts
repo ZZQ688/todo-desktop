@@ -43,6 +43,22 @@ test("setCompletion cascades parent->children and child->parent", async () => {
   expect(result.tasks.filter((t) => ["parent", "c1", "c2"].includes(t.id)).every((t) => t.status === "open")).toBe(true);
 });
 
+test("setCompletion cascades through multiple nesting levels", async () => {
+  const repo = createMemoryRepository();
+  await repo.mutate({ kind: "saveTask", task: draft("root"), subtasks: [{ id: "a", title: "a" }], scheduleToday: false }, day);
+  await repo.mutate({ kind: "saveTask", task: draft("b", { parentId: "a" }), subtasks: [], scheduleToday: false }, day);
+
+  let result = await repo.mutate({ kind: "setCompletion", ids: ["root"], completed: true }, day);
+  expect(result.tasks.find((t) => t.id === "root")!.status).toBe("completed");
+  expect(result.tasks.find((t) => t.id === "a")!.status).toBe("completed");
+  expect(result.tasks.find((t) => t.id === "b")!.status).toBe("completed");
+
+  result = await repo.mutate({ kind: "setCompletion", ids: ["b"], completed: false }, day);
+  expect(result.tasks.find((t) => t.id === "b")!.status).toBe("open");
+  expect(result.tasks.find((t) => t.id === "a")!.status).toBe("open");
+  expect(result.tasks.find((t) => t.id === "root")!.status).toBe("open");
+});
+
 test("saveTask inherits project and priority into children and reconciles removed subtasks", async () => {
   const repo = createMemoryRepository();
   await repo.mutate({ kind: "saveProject", id: "p1", name: "工作" }, day);

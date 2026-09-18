@@ -247,18 +247,13 @@ fn daily_references_require_a_task_and_cannot_duplicate_it() {
 }
 
 #[test]
-fn prevents_deep_nesting_and_parent_cycles() {
+fn allows_deep_nesting() {
     let mut conn = Connection::open_in_memory().unwrap();
     initialize(&mut conn).unwrap();
     insert_task(&conn, "parent", None).unwrap();
     insert_task(&conn, "child", Some("parent")).unwrap();
-    assert!(insert_task(&conn, "grandchild", Some("child")).is_err());
-    assert!(conn
-        .execute("UPDATE tasks SET parent_id='child' WHERE id='parent'", [])
-        .is_err());
-    assert!(conn
-        .execute("UPDATE tasks SET parent_id=id WHERE id='parent'", [])
-        .is_err());
+    insert_task(&conn, "grandchild", Some("child")).unwrap();
+    insert_task(&conn, "great-grandchild", Some("grandchild")).unwrap();
 }
 
 #[test]

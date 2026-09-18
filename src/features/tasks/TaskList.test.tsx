@@ -141,6 +141,22 @@ test("delete confirm uses the batch deleteTasks mutation", async () => {
   expect(run).toHaveBeenCalledWith({ kind: "deleteTasks", ids: ["t1"] });
 });
 
+test("renders nested subtasks recursively and lets a subtask add its own child", () => {
+  const parent = task("root", { title: "根任务" });
+  const child = task("child", { title: "子任务", parentId: "root" });
+  const grand = task("grand", { title: "孙任务", parentId: "child" });
+  const groups: TaskGroup[] = [{
+    parent,
+    children: [{ parent: child, children: [{ parent: grand, children: [] }] }],
+  }];
+  renderList({ groups, tasks: [parent, child, grand] });
+  expect(screen.getByText("根任务")).toBeInTheDocument();
+  expect(screen.getByText("子任务")).toBeInTheDocument();
+  expect(screen.getByText("孙任务")).toBeInTheDocument();
+  // The subtask row exposes its own 添加子任务 button.
+  expect(screen.getByRole("button", { name: "添加 子任务 的子任务" })).toBeInTheDocument();
+});
+
 test("selectable rows render a selection checkbox that toggles without completing", async () => {
   const user = userEvent.setup();
   const run = vi.fn().mockResolvedValue(true);

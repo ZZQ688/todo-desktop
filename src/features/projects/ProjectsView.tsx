@@ -65,15 +65,19 @@ export function ProjectsView({ workspace, busy, error, run }: Props) {
   const groups = useMemo(() => {
     const inSelection = (task: Task) => selected === "all" ||
       (selected === "none" ? task.projectId === null : task.projectId === selected);
-    const roots = workspace.tasks.filter((task) =>
-      task.parentId === null && !isInstanceTask(task) && inSelection(task));
-    return roots.flatMap((parent): TaskGroup[] => {
-      const children = workspace.tasks.filter((task) =>
-        task.parentId === parent.id && !isInstanceTask(task) && inSelection(task) &&
-        (status === "all" || task.status === status));
-      if (status === "all" || parent.status === status) return [{ parent, children }];
-      return children.length ? [{ parent, children, contextualParent: true }] : [];
-    });
+    const build = (parent: Task): TaskGroup | null => {
+      const children = workspace.tasks
+        .filter((task) => task.parentId === parent.id && !isInstanceTask(task) && inSelection(task))
+        .map((child) => build(child))
+        .filter((group): group is TaskGroup => group !== null);
+      const matchesStatus = status === "all" || parent.status === status;
+      if (matchesStatus) return { parent, children };
+      return children.length ? { parent, children, contextualParent: true } : null;
+    };
+    return workspace.tasks
+      .filter((task) => task.parentId === null && !isInstanceTask(task) && inSelection(task))
+      .map((root) => build(root))
+      .filter((group): group is TaskGroup => group !== null);
   }, [selected, status, workspace.tasks]);
 
   return <>
