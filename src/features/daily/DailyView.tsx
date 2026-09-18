@@ -121,7 +121,7 @@ export function DailyView({ workspace, date, today, onDateChange, busy, error, r
       </select></label>
       {!readOnly && <button aria-pressed={selecting} onClick={toggleSelecting}>多选</button>}
     </div>
-    <TaskList groups={groups} tasks={workspace.tasks} projects={workspace.projects} busy={busy} error={error} run={run}
+    <TaskList groups={groups} tasks={workspace.tasks} projects={workspace.projects} today={todayDate} busy={busy} error={error} run={run}
       readOnly={readOnly} selectable={selecting} selected={selectedIds} onToggleSelected={toggleSelected}
       onEdit={(task) => setEditor({ task })} onAddChild={(parent) => setEditor({ parent })}
       onRemoveFromToday={(task) => void run({ kind: "removeFromToday", ids: [task.id] })} />

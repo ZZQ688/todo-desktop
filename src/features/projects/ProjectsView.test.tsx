@@ -28,7 +28,7 @@ function workspace(overrides: Partial<Workspace> = {}): Workspace {
 
 function renderView(overrides: Partial<Parameters<typeof ProjectsView>[0]> = {}) {
   const run = vi.fn().mockResolvedValue(true);
-  render(<ProjectsView workspace={workspace()} busy={false} error={null} run={run} {...overrides} />);
+  render(<ProjectsView workspace={workspace()} today={() => day} busy={false} error={null} run={run} {...overrides} />);
   return { run };
 }
 

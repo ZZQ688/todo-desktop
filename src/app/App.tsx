@@ -75,7 +75,7 @@ export function App({ repository, today = localToday }: Props) {
               busy={workspace.busy} error={workspace.error} run={workspace.run} />
           </section>}
           {view === "projects" && <section role="tabpanel" id="panel-projects" aria-labelledby="tab-projects" tabIndex={0}>
-            <ProjectsView workspace={workspace.data} busy={workspace.busy} error={workspace.error} run={workspace.run} />
+            <ProjectsView workspace={workspace.data} today={today} busy={workspace.busy} error={workspace.error} run={workspace.run} />
           </section>}
           {view === "settings" && <section role="tabpanel" id="panel-settings" aria-labelledby="tab-settings" tabIndex={0}>
             <SettingsView workspace={workspace.data} busy={workspace.busy} run={workspace.run} />

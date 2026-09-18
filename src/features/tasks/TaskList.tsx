@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { CalendarClock, CalendarDays, CalendarX, Pencil, Plus, Repeat, Trash2, X } from "lucide-react";
 import type { Mutation } from "../../application/workspace";
+import type { LocalDate } from "../../domain/local-date";
 import type { Project, RepeatRule, Task } from "../../domain/models";
 import { InlineMutationError } from "../shared/InlineMutationError";
 import { useModalFocus } from "../shared/useModalFocus";
@@ -15,6 +16,7 @@ interface Props {
   groups: TaskGroup[];
   tasks: Task[];
   projects: Project[];
+  today: LocalDate;
   busy: boolean;
   error: string | null;
   run: (mutation: Mutation) => Promise<boolean>;
@@ -39,6 +41,12 @@ function describeRepeat(repeat: RepeatRule): string {
     case "weekly": return interval === 1 ? "每周" : `每 ${interval} 周`;
     case "monthly": return interval === 1 ? "每月" : `每 ${interval} 月`;
   }
+}
+
+function dueInfo(dueDate: LocalDate, today: LocalDate, status: Task["status"]): { text: string; kind: "overdue" | "today" | "future" } {
+  if (status !== "completed" && dueDate < today) return { text: `已逾期 ${dueDate}`, kind: "overdue" };
+  if (status !== "completed" && dueDate === today) return { text: "今天到期", kind: "today" };
+  return { text: `截止 ${dueDate}`, kind: "future" };
 }
 
 function ConfirmDelete({ task, busy, error, onCancel, onConfirm }: {
@@ -68,8 +76,8 @@ function ConfirmDelete({ task, busy, error, onCancel, onConfirm }: {
   </div>;
 }
 
-function TaskRow({ task, children, contextual, projects, busy, run, onEdit, onAddChild, onAddToToday, onRemoveFromToday, onDelete, readOnly, selectable, selected, onToggleSelected }: {
-  task: Task; children: Task[]; contextual?: boolean; projects: Project[]; busy: boolean;
+function TaskRow({ task, children, contextual, projects, today, busy, run, onEdit, onAddChild, onAddToToday, onRemoveFromToday, onDelete, readOnly, selectable, selected, onToggleSelected }: {
+  task: Task; children: Task[]; contextual?: boolean; projects: Project[]; today: LocalDate; busy: boolean;
   run: Props["run"]; onEdit: Props["onEdit"]; onAddChild: Props["onAddChild"];
   onAddToToday?: Props["onAddToToday"]; onRemoveFromToday?: Props["onRemoveFromToday"];
   onDelete: (task: Task) => void; readOnly?: boolean;
@@ -77,6 +85,7 @@ function TaskRow({ task, children, contextual, projects, busy, run, onEdit, onAd
 }) {
   const completedChildren = children.filter(({ status }) => status === "completed").length;
   const project = projects.find(({ id }) => id === task.projectId);
+  const due = task.dueDate ? dueInfo(task.dueDate, today, task.status) : null;
   return <div className={`task-row${contextual ? " task-row-context" : ""}`}>
     {contextual ? <span className="context-marker" aria-hidden="true" /> : readOnly ? <span aria-hidden="true" />
       : selectable ? <input type="checkbox"
@@ -98,7 +107,9 @@ function TaskRow({ task, children, contextual, projects, busy, run, onEdit, onAd
       </div>
       {!contextual && <div className="task-meta">
         {project && <span>{project.name}</span>}
-        {task.dueDate && <span><CalendarClock aria-hidden="true" />截止 {task.dueDate}</span>}
+        {due && <span className={`due-badge due-badge--${due.kind}`}>
+          {due.kind === "overdue" ? <CalendarX aria-hidden="true" /> : <CalendarClock aria-hidden="true" />}
+          {due.text}</span>}
         <span>建立于 {task.createdOn}</span>
         {children.length > 0 && <span>{completedChildren}/{children.length} 项子任务</span>}
       </div>}
@@ -118,10 +129,11 @@ function TaskRow({ task, children, contextual, projects, busy, run, onEdit, onAd
   </div>;
 }
 
-function GroupNode({ group, tasks, projects, busy, run, onEdit, onAddChild, onAddToToday, onRemoveFromToday, onDelete, readOnly, selectable, selected, onToggleSelected }: {
+function GroupNode({ group, tasks, projects, today, busy, run, onEdit, onAddChild, onAddToToday, onRemoveFromToday, onDelete, readOnly, selectable, selected, onToggleSelected }: {
   group: TaskGroup;
   tasks: Task[];
   projects: Project[];
+  today: LocalDate;
   busy: boolean;
   run: Props["run"];
   onEdit: Props["onEdit"];
@@ -137,25 +149,25 @@ function GroupNode({ group, tasks, projects, busy, run, onEdit, onAddChild, onAd
   const directChildren = tasks.filter((task) => task.parentId === group.parent.id);
   return <li data-task-id={group.parent.id} aria-label={group.parent.title}>
     <TaskRow task={group.parent} children={directChildren} contextual={group.contextualParent}
-      projects={projects} busy={busy} run={run} onEdit={onEdit} onAddChild={onAddChild}
+      projects={projects} today={today} busy={busy} run={run} onEdit={onEdit} onAddChild={onAddChild}
       onAddToToday={onAddToToday} onRemoveFromToday={onRemoveFromToday} onDelete={onDelete}
       readOnly={readOnly} selectable={selectable} selected={selected} onToggleSelected={onToggleSelected} />
     {group.children.length > 0 && <ul className="subtask-list">
       {group.children.map((child) => <GroupNode key={child.parent.id} group={child} tasks={tasks}
-        projects={projects} busy={busy} run={run} onEdit={onEdit} onAddChild={onAddChild}
+        projects={projects} today={today} busy={busy} run={run} onEdit={onEdit} onAddChild={onAddChild}
         onAddToToday={onAddToToday} onRemoveFromToday={onRemoveFromToday} onDelete={onDelete}
         readOnly={readOnly} selectable={selectable} selected={selected} onToggleSelected={onToggleSelected} />)}
     </ul>}
   </li>;
 }
 
-export function TaskList({ groups, tasks, projects, busy, error, run, onEdit, onAddChild, onAddToToday, onRemoveFromToday, readOnly, selectable = false, selected = EMPTY_SELECTION, onToggleSelected = NOOP_TOGGLE }: Props) {
+export function TaskList({ groups, tasks, projects, today, busy, error, run, onEdit, onAddChild, onAddToToday, onRemoveFromToday, readOnly, selectable = false, selected = EMPTY_SELECTION, onToggleSelected = NOOP_TOGGLE }: Props) {
   const [deleting, setDeleting] = useState<Task | null>(null);
   if (groups.length === 0) return <p className="empty-state">这里还没有任务</p>;
   return <>
     <ul className="task-list">
       {groups.map((group) => <GroupNode key={group.parent.id} group={group} tasks={tasks}
-        projects={projects} busy={busy} run={run} onEdit={onEdit} onAddChild={onAddChild}
+        projects={projects} today={today} busy={busy} run={run} onEdit={onEdit} onAddChild={onAddChild}
         onAddToToday={onAddToToday} onRemoveFromToday={onRemoveFromToday} onDelete={setDeleting} readOnly={readOnly}
         selectable={selectable} selected={selected} onToggleSelected={onToggleSelected} />)}
     </ul>

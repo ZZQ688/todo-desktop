@@ -30,7 +30,7 @@ function renderList(props: {
   const run = vi.fn().mockResolvedValue(true);
   const onEdit = vi.fn();
   const onAddChild = vi.fn();
-  render(<TaskList groups={groups} tasks={tasks} projects={props.projects ?? []}
+  render(<TaskList groups={groups} tasks={tasks} projects={props.projects ?? []} today={day}
     busy={false} error={null} run={run} onEdit={onEdit} onAddChild={onAddChild}
     onAddToToday={props.onAddToToday} onRemoveFromToday={props.onRemoveFromToday} readOnly={props.readOnly} />);
   return { run, onEdit, onAddChild };
@@ -82,6 +82,31 @@ test("a recurring source row shows no 加入今日 button while a normal task do
 test("renders 建立于 createdOn in the task meta", () => {
   renderList({ groups: [{ parent: task("t1", { title: "写报告", createdOn: asLocalDate("2026-09-17") }), children: [] }] });
   expect(screen.getByText("建立于 2026-09-17")).toBeInTheDocument();
+});
+
+test("marks an overdue due date with a red 已逾期 badge", () => {
+  renderList({ groups: [{ parent: task("t1", { title: "写报告", dueDate: asLocalDate("2026-09-16") }), children: [] }] });
+  const badge = screen.getByText("已逾期 2026-09-16");
+  expect(badge).toHaveClass("due-badge--overdue");
+});
+
+test("marks a task due today with an amber 今天到期 badge", () => {
+  renderList({ groups: [{ parent: task("t1", { title: "写报告", dueDate: asLocalDate("2026-09-17") }), children: [] }] });
+  const badge = screen.getByText("今天到期");
+  expect(badge).toHaveClass("due-badge--today");
+});
+
+test("renders a future due date with a neutral 截止 badge", () => {
+  renderList({ groups: [{ parent: task("t1", { title: "写报告", dueDate: asLocalDate("2026-09-20") }), children: [] }] });
+  const badge = screen.getByText("截止 2026-09-20");
+  expect(badge).toHaveClass("due-badge--future");
+});
+
+test("a completed task never shows the overdue style even when its date passed", () => {
+  renderList({ groups: [{ parent: task("t1", { title: "写报告", status: "completed", dueDate: asLocalDate("2026-09-16") }), children: [] }] });
+  const badge = screen.getByText("截止 2026-09-16");
+  expect(badge).toHaveClass("due-badge--future");
+  expect(badge).not.toHaveClass("due-badge--overdue");
 });
 
 test("renders describeRepeat text for source tasks and 重复实例 for instances", () => {
@@ -162,7 +187,7 @@ test("selectable rows render a selection checkbox that toggles without completin
   const run = vi.fn().mockResolvedValue(true);
   const onToggleSelected = vi.fn();
   const t = task("t1", { title: "写报告" });
-  render(<TaskList groups={[{ parent: t, children: [] }]} tasks={[t]} projects={[]}
+  render(<TaskList groups={[{ parent: t, children: [] }]} tasks={[t]} projects={[]} today={day}
     busy={false} error={null} run={run} onEdit={vi.fn()} onAddChild={vi.fn()}
     selectable selected={new Set()} onToggleSelected={onToggleSelected} />);
   const checkbox = screen.getByRole("checkbox", { name: "选择 写报告" });
@@ -174,7 +199,7 @@ test("selectable rows render a selection checkbox that toggles without completin
 
 test("a selectable but readOnly row shows no checkbox", () => {
   const t = task("t1", { title: "写报告" });
-  render(<TaskList groups={[{ parent: t, children: [] }]} tasks={[t]} projects={[]}
+  render(<TaskList groups={[{ parent: t, children: [] }]} tasks={[t]} projects={[]} today={day}
     busy={false} error={null} run={vi.fn()} onEdit={vi.fn()} onAddChild={vi.fn()}
     selectable selected={new Set()} onToggleSelected={vi.fn()} readOnly />);
   expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();

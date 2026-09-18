@@ -162,6 +162,11 @@ main { min-width: 0; width: 100%; max-width: 1120px; padding: 25px 30px 50px; }
 .task-meta { display: flex; flex-wrap: wrap; gap: 5px 13px; margin-top: 4px; color: #6d746f; font-size: 12px; }
 .task-meta span { display: inline-flex; align-items: center; gap: 4px; }
 .task-meta svg { width: 13px; height: 13px; flex-basis: 13px; }
+.due-badge { font-size: 11px; line-height: 1; padding: 3px 6px; border-radius: 3px; font-weight: 600; }
+.due-badge svg { width: 12px; height: 12px; flex-basis: 12px; }
+.due-badge--overdue { color: #fff; background: #d9413a; }
+.due-badge--today { color: #553a00; background: #f2c94c; }
+.due-badge--future { color: #59615b; background: #e9ece9; }
 .row-actions { display: flex; align-items: center; gap: 3px; opacity: .58; }
 .task-row:hover .row-actions, .row-actions:focus-within { opacity: 1; }
 .row-actions .icon-button { width: 32px; min-width: 32px; min-height: 32px; height: 32px; border-color: transparent; background: transparent; }

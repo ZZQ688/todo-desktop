@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Folder, Pencil, Plus, Trash2 } from "lucide-react";
 import type { Mutation, Workspace } from "../../application/workspace";
+import type { LocalDate } from "../../domain/local-date";
 import type { Project, Task } from "../../domain/models";
 import { MultiSelectBar } from "../shared/MultiSelectBar";
 import { DeleteProjectDialog, ProjectDialog } from "../shared/ProjectDialogs";
@@ -9,6 +10,7 @@ import { TaskList, type TaskGroup } from "../tasks/TaskList";
 
 interface Props {
   workspace: Workspace;
+  today: () => LocalDate;
   busy: boolean;
   error: string | null;
   run: (mutation: Mutation) => Promise<boolean>;
@@ -19,7 +21,8 @@ function isInstanceTask(task: Task): boolean {
   return task.recurrenceSourceId !== null;
 }
 
-export function ProjectsView({ workspace, busy, error, run }: Props) {
+export function ProjectsView({ workspace, today, busy, error, run }: Props) {
+  const todayDate = today();
   const [selected, setSelected] = useState("all");
   const [status, setStatus] = useState<"all" | "open" | "completed">("all");
   const [editor, setEditor] = useState<EditorState>(null);
@@ -114,7 +117,7 @@ export function ProjectsView({ workspace, busy, error, run }: Props) {
               onClick={() => setDeletingProject(selectedProject)}><Trash2 aria-hidden="true" /></button>
           </div>}
         </div>
-        <TaskList groups={groups} tasks={workspace.tasks} projects={workspace.projects} busy={busy} error={error} run={run}
+        <TaskList groups={groups} tasks={workspace.tasks} projects={workspace.projects} today={todayDate} busy={busy} error={error} run={run}
           selectable={selecting} selected={selectedIds} onToggleSelected={toggleSelected}
           onEdit={(task) => setEditor({ task })} onAddChild={(parent) => setEditor({ parent })}
           onAddToToday={(task) => void run({ kind: "addToToday", ids: [task.id] })} />
