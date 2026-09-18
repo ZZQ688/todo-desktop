@@ -114,12 +114,13 @@ export function DailyView({ workspace, date, today, onDateChange, busy, error, r
     </div>
     <TaskList groups={groups} tasks={workspace.tasks} projects={workspace.projects} busy={busy} error={error} run={run}
       readOnly={readOnly} selectable={selecting} selected={selectedIds} onToggleSelected={toggleSelected}
-      onEdit={(task) => setEditor({ task })} onAddChild={(parent) => setEditor({ parent })} />
+      onEdit={(task) => setEditor({ task })} onAddChild={(parent) => setEditor({ parent })}
+      onRemoveFromToday={(task) => void run({ kind: "removeFromToday", ids: [task.id] })} />
     {selecting && <MultiSelectBar count={selectedIds.size} busy={busy} projects={workspace.projects}
       onComplete={() => void bulk({ kind: "setCompletion", ids: selectedArray, completed: true })}
       onReopen={() => void bulk({ kind: "setCompletion", ids: selectedArray, completed: false })}
       onDelete={() => void bulk({ kind: "deleteTasks", ids: selectedArray })}
-      onAddToToday={() => void bulk({ kind: "addToToday", ids: selectedArray })}
+      onRemoveFromToday={() => void bulk({ kind: "removeFromToday", ids: selectedArray })}
       onMoveToGroup={(projectId) => void bulk({ kind: "moveToGroup", ids: selectedArray, projectId })}
       onExit={exitSelection} />}
     {editor && <TaskEditor workspace={workspace} task={editor.task} parentId={editor.parent?.id}

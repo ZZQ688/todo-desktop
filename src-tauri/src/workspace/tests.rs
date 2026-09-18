@@ -457,6 +457,68 @@ fn add_to_today_is_idempotent() {
 }
 
 #[test]
+fn remove_from_today_removes_only_todays_entry() {
+    let mut connection = memory_database();
+    mutate_workspace(
+        &mut connection,
+        task("task", "Task", None, None, None, false),
+        "2026-09-17",
+    )
+    .unwrap();
+    let loaded = mutate_workspace(
+        &mut connection,
+        Mutation::AddToToday {
+            ids: vec!["task".into()],
+        },
+        "2026-09-16",
+    )
+    .unwrap();
+    assert_eq!(loaded.entries.len(), 1);
+    let loaded = mutate_workspace(
+        &mut connection,
+        Mutation::AddToToday {
+            ids: vec!["task".into()],
+        },
+        "2026-09-17",
+    )
+    .unwrap();
+    assert_eq!(loaded.entries.len(), 2);
+
+    let loaded = mutate_workspace(
+        &mut connection,
+        Mutation::RemoveFromToday {
+            ids: vec!["task".into()],
+        },
+        "2026-09-17",
+    )
+    .unwrap();
+    assert_eq!(loaded.entries.len(), 1);
+    assert_eq!(loaded.entries[0].local_date, "2026-09-16");
+    assert!(loaded.tasks.iter().any(|t| t.id == "task"));
+}
+
+#[test]
+fn remove_from_today_rejects_unknown_id_atomically() {
+    let mut connection = memory_database();
+    mutate_workspace(
+        &mut connection,
+        task("task", "Task", None, None, None, true),
+        "2026-09-17",
+    )
+    .unwrap();
+    let result = mutate_workspace(
+        &mut connection,
+        Mutation::RemoveFromToday {
+            ids: vec!["task".into(), "ghost".into()],
+        },
+        "2026-09-17",
+    );
+    assert!(result.is_err());
+    let loaded = load_workspace(&connection).unwrap();
+    assert_eq!(loaded.entries.len(), 1);
+}
+
+#[test]
 fn move_to_group_moves_root_and_children_and_validates_project() {
     let mut connection = memory_database();
     mutate_workspace(&mut connection, project("a", "A"), "2026-09-17").unwrap();

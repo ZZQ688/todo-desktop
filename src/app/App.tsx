@@ -84,7 +84,7 @@ export function App({ repository, today = localToday }: Props) {
       </>}
     </main>
     {workspace.data && <ContextMenu workspace={workspace.data} busy={workspace.busy} error={workspace.error}
-      run={workspace.run} view={view} />}
+      run={workspace.run} view={view} today={today} />}
     {workspace.data && editingTask && <TaskEditor workspace={workspace.data} task={editingTask}
       scheduleToday={view === "daily"} initialProjectId={editingTask.projectId}
       busy={workspace.busy} error={workspace.error} run={workspace.run}

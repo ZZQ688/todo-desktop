@@ -32,6 +32,7 @@ export type Mutation =
   | { kind: "setCompletion"; ids: string[]; completed: boolean }
   | { kind: "deleteTasks"; ids: string[] }
   | { kind: "addToToday"; ids: string[] }
+  | { kind: "removeFromToday"; ids: string[] }
   | { kind: "moveToGroup"; ids: string[]; projectId: string | null }
   | { kind: "saveProject"; id: string; name: string }
   | { kind: "deleteProject"; id: string }

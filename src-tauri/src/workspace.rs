@@ -162,6 +162,9 @@ pub enum Mutation {
     AddToToday {
         ids: Vec<String>,
     },
+    RemoveFromToday {
+        ids: Vec<String>,
+    },
     MoveToGroup {
         ids: Vec<String>,
         project_id: Option<String>,
@@ -293,6 +296,7 @@ fn apply_mutation(
         Mutation::SetCompletion { ids, completed } => set_completion(tx, ids, completed),
         Mutation::DeleteTasks { ids } => delete_tasks(tx, ids),
         Mutation::AddToToday { ids } => add_to_today(tx, ids, today),
+        Mutation::RemoveFromToday { ids } => remove_from_today(tx, ids, today),
         Mutation::MoveToGroup { ids, project_id } => move_to_group(tx, ids, project_id),
         Mutation::SaveProject { id, name } => save_project(tx, &id, &name),
         Mutation::DeleteProject { id } => {
@@ -542,6 +546,29 @@ fn add_to_today(tx: &Transaction<'_>, ids: Vec<String>, today: &str) -> Result<(
             return Err(WorkspaceError::MissingTask(id.clone()));
         }
         insert_entry(tx, id, today, None)?;
+    }
+    Ok(())
+}
+
+fn remove_from_today(
+    tx: &Transaction<'_>,
+    ids: Vec<String>,
+    today: &str,
+) -> Result<(), WorkspaceError> {
+    for id in &ids {
+        if tx
+            .query_row("SELECT 1 FROM tasks WHERE id=?1", [id], |_| Ok(()))
+            .optional()?
+            .is_none()
+        {
+            return Err(WorkspaceError::MissingTask(id.clone()));
+        }
+        // Removes today's membership only — the task itself and its historical
+        // entries are preserved, so it can be re-added later.
+        tx.execute(
+            "DELETE FROM daily_entries WHERE task_id=?1 AND local_date=?2",
+            params![id, today],
+        )?;
     }
     Ok(())
 }

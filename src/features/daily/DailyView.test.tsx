@@ -139,3 +139,25 @@ test("移动分组 dispatches moveToGroup with the chosen project id", async () 
   await user.selectOptions(screen.getByLabelText("移动分组"), "p1");
   expect(run).toHaveBeenCalledWith({ kind: "moveToGroup", ids: ["t1", "t2"], projectId: "p1" });
 });
+
+test("row 移出今日 dispatches removeFromToday for that task", async () => {
+  const user = userEvent.setup();
+  const { run } = renderView({
+    workspace: workspace({
+      tasks: [task("t1", { title: "写报告" })],
+      entries: [{ id: "e1", taskId: "t1", localDate: today, carriedFromDate: null }],
+    }),
+  });
+  await user.click(screen.getByRole("button", { name: "移出 写报告 的今日" }));
+  expect(run).toHaveBeenCalledWith({ kind: "removeFromToday", ids: ["t1"] });
+});
+
+test("bulk 移出今日 dispatches removeFromToday with every selected id", async () => {
+  const user = userEvent.setup();
+  const { run } = renderView({ workspace: scheduledWorkspace() });
+  await user.click(screen.getByRole("button", { name: "多选" }));
+  await user.click(screen.getByRole("checkbox", { name: "选择 写报告" }));
+  await user.click(screen.getByRole("checkbox", { name: "选择 开会" }));
+  await user.click(screen.getByRole("button", { name: "移出今日" }));
+  expect(run).toHaveBeenCalledWith({ kind: "removeFromToday", ids: ["t1", "t2"] });
+});

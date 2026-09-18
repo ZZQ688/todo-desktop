@@ -15,12 +15,13 @@ function renderBar(overrides: Partial<Parameters<typeof MultiSelectBar>[0]> = {}
   const onReopen = vi.fn();
   const onDelete = vi.fn();
   const onAddToToday = vi.fn();
+  const onRemoveFromToday = vi.fn();
   const onMoveToGroup = vi.fn();
   const onExit = vi.fn();
   render(<MultiSelectBar count={2} busy={false} projects={projects}
     onComplete={onComplete} onReopen={onReopen} onDelete={onDelete} onAddToToday={onAddToToday}
-    onMoveToGroup={onMoveToGroup} onExit={onExit} {...overrides} />);
-  return { onComplete, onReopen, onDelete, onAddToToday, onMoveToGroup, onExit };
+    onRemoveFromToday={onRemoveFromToday} onMoveToGroup={onMoveToGroup} onExit={onExit} {...overrides} />);
+  return { onComplete, onReopen, onDelete, onAddToToday, onRemoveFromToday, onMoveToGroup, onExit };
 }
 
 test("shows the selected count", () => {
@@ -47,6 +48,13 @@ test("加入今日 fires onAddToToday", async () => {
   const { onAddToToday } = renderBar();
   await user.click(screen.getByRole("button", { name: "加入今日" }));
   expect(onAddToToday).toHaveBeenCalled();
+});
+
+test("移出今日 fires onRemoveFromToday", async () => {
+  const user = userEvent.setup();
+  const { onRemoveFromToday } = renderBar();
+  await user.click(screen.getByRole("button", { name: "移出今日" }));
+  expect(onRemoveFromToday).toHaveBeenCalled();
 });
 
 test("删除 fires onDelete", async () => {

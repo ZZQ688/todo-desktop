@@ -106,6 +106,12 @@ function apply(state: Workspace, mutation: Mutation, today: LocalDate, occurrenc
         insertEntry(state, id, today);
       }
       break;
+    case "removeFromToday":
+      for (const id of mutation.ids) {
+        taskById(state, id);
+        state.entries = state.entries.filter((entry) => !(entry.taskId === id && entry.localDate === today));
+      }
+      break;
     case "moveToGroup":
       moveToGroup(state, mutation.ids, mutation.projectId, now);
       break;

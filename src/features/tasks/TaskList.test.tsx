@@ -22,6 +22,7 @@ function renderList(props: {
   tasks?: Task[];
   projects?: Project[];
   onAddToToday?: (task: Task) => void;
+  onRemoveFromToday?: (task: Task) => void;
   readOnly?: boolean;
 } = {}) {
   const groups = props.groups ?? [];
@@ -31,7 +32,7 @@ function renderList(props: {
   const onAddChild = vi.fn();
   render(<TaskList groups={groups} tasks={tasks} projects={props.projects ?? []}
     busy={false} error={null} run={run} onEdit={onEdit} onAddChild={onAddChild}
-    onAddToToday={props.onAddToToday} readOnly={props.readOnly} />);
+    onAddToToday={props.onAddToToday} onRemoveFromToday={props.onRemoveFromToday} readOnly={props.readOnly} />);
   return { run, onEdit, onAddChild };
 }
 
@@ -55,6 +56,15 @@ test("fires onAddToToday with the task when the 加入今日 button is clicked",
   renderList({ groups: [{ parent: t, children: [] }], onAddToToday });
   await user.click(screen.getByRole("button", { name: "加入 写报告 到今日" }));
   expect(onAddToToday).toHaveBeenCalledWith(t);
+});
+
+test("fires onRemoveFromToday with the task when the 移出今日 button is clicked", async () => {
+  const user = userEvent.setup();
+  const onRemoveFromToday = vi.fn();
+  const t = task("t1", { title: "写报告" });
+  renderList({ groups: [{ parent: t, children: [] }], onRemoveFromToday });
+  await user.click(screen.getByRole("button", { name: "移出 写报告 的今日" }));
+  expect(onRemoveFromToday).toHaveBeenCalledWith(t);
 });
 
 test("a recurring source row shows no 加入今日 button while a normal task does", () => {

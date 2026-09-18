@@ -141,6 +141,17 @@ test("addToToday is idempotent per task", async () => {
   expect(result.entries.filter((e) => e.taskId === "t" && e.localDate === day)).toHaveLength(1);
 });
 
+test("removeFromToday drops today's entry but keeps the task and history", async () => {
+  const repo = createMemoryRepository();
+  await repo.mutate({ kind: "saveTask", task: draft("t"), subtasks: [], scheduleToday: false }, day);
+  await repo.mutate({ kind: "addToToday", ids: ["t"] }, day);
+  await repo.mutate({ kind: "addToToday", ids: ["t"] }, day2);
+  const result = await repo.mutate({ kind: "removeFromToday", ids: ["t"] }, day2);
+  expect(result.entries.filter((e) => e.taskId === "t")).toHaveLength(1);
+  expect(result.entries[0].localDate).toBe(day);
+  expect(result.tasks.some((t) => t.id === "t")).toBe(true);
+});
+
 test("moveToGroup moves a root and its children and ignores non-roots", async () => {
   const repo = createMemoryRepository();
   await repo.mutate({ kind: "saveProject", id: "p1", name: "工作" }, day);

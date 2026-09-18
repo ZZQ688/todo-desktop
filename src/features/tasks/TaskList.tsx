@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { CalendarClock, CalendarDays, Pencil, Plus, Repeat, Trash2, X } from "lucide-react";
+import { CalendarClock, CalendarDays, CalendarX, Pencil, Plus, Repeat, Trash2, X } from "lucide-react";
 import type { Mutation } from "../../application/workspace";
 import type { Project, RepeatRule, Task } from "../../domain/models";
 import { InlineMutationError } from "../shared/InlineMutationError";
@@ -21,6 +21,7 @@ interface Props {
   onEdit: (task: Task) => void;
   onAddChild: (task: Task) => void;
   onAddToToday?: (task: Task) => void;
+  onRemoveFromToday?: (task: Task) => void;
   readOnly?: boolean;
   selectable?: boolean;
   selected?: ReadonlySet<string>;
@@ -67,10 +68,11 @@ function ConfirmDelete({ task, busy, error, onCancel, onConfirm }: {
   </div>;
 }
 
-function TaskRow({ task, children, contextual, projects, busy, run, onEdit, onAddChild, onAddToToday, onDelete, readOnly, selectable, selected, onToggleSelected }: {
+function TaskRow({ task, children, contextual, projects, busy, run, onEdit, onAddChild, onAddToToday, onRemoveFromToday, onDelete, readOnly, selectable, selected, onToggleSelected }: {
   task: Task; children: Task[]; contextual?: boolean; projects: Project[]; busy: boolean;
   run: Props["run"]; onEdit: Props["onEdit"]; onAddChild: Props["onAddChild"];
-  onAddToToday?: Props["onAddToToday"]; onDelete: (task: Task) => void; readOnly?: boolean;
+  onAddToToday?: Props["onAddToToday"]; onRemoveFromToday?: Props["onRemoveFromToday"];
+  onDelete: (task: Task) => void; readOnly?: boolean;
   selectable?: boolean; selected?: ReadonlySet<string>; onToggleSelected?: (id: string) => void;
 }) {
   const completedChildren = children.filter(({ status }) => status === "completed").length;
@@ -106,6 +108,8 @@ function TaskRow({ task, children, contextual, projects, busy, run, onEdit, onAd
         title="添加子任务" onClick={() => onAddChild(task)} disabled={busy}><Plus aria-hidden="true" /></button>}
       {onAddToToday && task.repeat === null && <button className="icon-button" aria-label={`加入 ${task.title} 到今日`}
         title="加入今日" onClick={() => onAddToToday(task)} disabled={busy}><CalendarDays aria-hidden="true" /></button>}
+      {onRemoveFromToday && <button className="icon-button" aria-label={`移出 ${task.title} 的今日`}
+        title="移出今日" onClick={() => onRemoveFromToday(task)} disabled={busy}><CalendarX aria-hidden="true" /></button>}
       <button className="icon-button" aria-label={`编辑 ${task.title}`} title="编辑"
         onClick={() => onEdit(task)} disabled={busy}><Pencil aria-hidden="true" /></button>
       <button className="icon-button danger-icon" aria-label={`删除 ${task.title}`} title="删除"
@@ -114,7 +118,7 @@ function TaskRow({ task, children, contextual, projects, busy, run, onEdit, onAd
   </div>;
 }
 
-export function TaskList({ groups, tasks, projects, busy, error, run, onEdit, onAddChild, onAddToToday, readOnly, selectable = false, selected = EMPTY_SELECTION, onToggleSelected = NOOP_TOGGLE }: Props) {
+export function TaskList({ groups, tasks, projects, busy, error, run, onEdit, onAddChild, onAddToToday, onRemoveFromToday, readOnly, selectable = false, selected = EMPTY_SELECTION, onToggleSelected = NOOP_TOGGLE }: Props) {
   const [deleting, setDeleting] = useState<Task | null>(null);
   if (groups.length === 0) return <p className="empty-state">这里还没有任务</p>;
   return <>
@@ -122,12 +126,12 @@ export function TaskList({ groups, tasks, projects, busy, error, run, onEdit, on
       {groups.map(({ parent, children, contextualParent }) => <li key={parent.id} data-task-id={parent.id} aria-label={parent.title}>
         <TaskRow task={parent} children={tasks.filter((task) => task.parentId === parent.id)}
           contextual={contextualParent} projects={projects}
-          busy={busy} run={run} onEdit={onEdit} onAddChild={onAddChild} onAddToToday={onAddToToday} onDelete={setDeleting} readOnly={readOnly}
+          busy={busy} run={run} onEdit={onEdit} onAddChild={onAddChild} onAddToToday={onAddToToday} onRemoveFromToday={onRemoveFromToday} onDelete={setDeleting} readOnly={readOnly}
           selectable={selectable} selected={selected} onToggleSelected={onToggleSelected} />
         {children.length > 0 && <ul className="subtask-list">
           {children.map((child) => <li key={child.id} data-task-id={child.id} aria-label={child.title}>
             <TaskRow task={child} children={[]} projects={projects} busy={busy} run={run}
-              onEdit={onEdit} onAddChild={onAddChild} onAddToToday={onAddToToday} onDelete={setDeleting} readOnly={readOnly}
+              onEdit={onEdit} onAddChild={onAddChild} onAddToToday={onAddToToday} onRemoveFromToday={onRemoveFromToday} onDelete={setDeleting} readOnly={readOnly}
               selectable={selectable} selected={selected} onToggleSelected={onToggleSelected} />
           </li>)}
         </ul>}

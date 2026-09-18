@@ -48,6 +48,19 @@ test("a project task joins today via the add-to-today row action", async ({ page
   await expect(page.getByRole("checkbox", { name: "完成 写周报", exact: true })).toBeVisible();
 });
 
+test("a task can be removed from today", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "添加任务", exact: true }).click();
+  const editor = page.getByRole("dialog");
+  await editor.getByLabel("任务名称", { exact: true }).fill("写周报");
+  await editor.getByRole("button", { name: "保存", exact: true }).click();
+  await expect(editor).toBeHidden();
+  await expect(page.getByRole("checkbox", { name: "完成 写周报", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "移出 写周报 的今日", exact: true }).click();
+  await expect(page.getByRole("checkbox", { name: "完成 写周报", exact: true })).not.toBeVisible();
+});
+
 test("multi-select moves a task into a project group", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("tab", { name: "项目", exact: true }).click();

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { Mutation, Workspace } from "../../application/workspace";
+import type { LocalDate } from "../../domain/local-date";
 import type { Project, Task } from "../../domain/models";
 import { TaskEditor } from "../tasks/TaskEditor";
 import { InlineMutationError } from "./InlineMutationError";
@@ -24,6 +25,7 @@ interface Props {
   error: string | null;
   run: Run;
   view: View;
+  today: () => LocalDate;
 }
 
 const MENU_WIDTH = 200;
@@ -63,7 +65,7 @@ function ConfirmDeleteTask({ task, busy, error, onCancel, onConfirm }: {
   </div>;
 }
 
-export function ContextMenu({ workspace, busy, error, run, view }: Props) {
+export function ContextMenu({ workspace, busy, error, run, view, today }: Props) {
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [editor, setEditor] = useState<EditorState>(null);
   const [projectEditor, setProjectEditor] = useState<Project | "new" | null>(null);
@@ -131,6 +133,11 @@ export function ContextMenu({ workspace, busy, error, run, view }: Props) {
     closeMenu();
   }
 
+  function removeFromToday(task: Task) {
+    void run({ kind: "removeFromToday", ids: [task.id] });
+    closeMenu();
+  }
+
   function moveToGroup(task: Task, projectId: string | null) {
     void run({ kind: "moveToGroup", ids: [task.id], projectId });
     closeMenu();
@@ -173,6 +180,9 @@ export function ContextMenu({ workspace, busy, error, run, view }: Props) {
 
   const taskTarget = menu?.target.kind === "task" ? menu.target.task : undefined;
   const projectTarget = menu?.target.kind === "project" ? menu.target.project : undefined;
+  const todayDate = today();
+  const taskInToday = taskTarget !== undefined &&
+    workspace.entries.some((entry) => entry.taskId === taskTarget.id && entry.localDate === todayDate);
 
   return <>
     {menu && <div ref={menuRef} className="context-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
@@ -180,7 +190,9 @@ export function ContextMenu({ workspace, busy, error, run, view }: Props) {
         <button role="menuitem" onClick={() => toggleCompletion(taskTarget)}>
           {taskTarget.status === "completed" ? "重开" : "完成"}</button>
         <button role="menuitem" onClick={() => editTask(taskTarget)}>编辑</button>
-        <button role="menuitem" onClick={() => addToToday(taskTarget)}>加入今日</button>
+        {taskInToday
+          ? <button role="menuitem" onClick={() => removeFromToday(taskTarget)}>移出今日</button>
+          : <button role="menuitem" onClick={() => addToToday(taskTarget)}>加入今日</button>}
         {!taskTarget.parentId && <button role="menuitem" onClick={() => addChild(taskTarget)}>添加子任务</button>}
         <button role="menuitem" onClick={() => setMenu((prev) => prev && { ...prev, submenuOpen: !prev.submenuOpen })}>移动分组</button>
         {menu.submenuOpen && <div className="context-submenu" role="group" aria-label="移动到分组">
